@@ -5,30 +5,36 @@ import { useGame } from '../contexts/GameContext';
 const HistoryContainer = styled.div`
   width: 100%;
   max-width: 350px;
-  background-color: rgba(30, 30, 46, 0.8);
-  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
 `;
 
 const HistoryHeader = styled.div`
-  padding: 12px;
-  background-color: #272736;
-  font-weight: 600;
-  color: #e2b714;
-  border-bottom: 1px solid #333;
+  padding: 15px;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.8) 0%, rgba(0, 0, 0, 0.8) 100%);
+  font-weight: 700;
+  color: #d4af37;
+  border-bottom: 2px solid rgba(212, 175, 55, 0.3);
   display: flex;
   align-items: center;
+  text-transform: uppercase;
+  letter-spacing: 1px;
   
   svg {
     margin-right: 8px;
     font-size: 1.2rem;
+    color: #d4af37;
   }
 `;
 
 const HistoryList = styled.div`
   max-height: 300px;
   overflow-y: auto;
+  background: rgba(10, 34, 25, 0.3);
   
   /* Scrollbar styling */
   &::-webkit-scrollbar {
@@ -36,26 +42,27 @@ const HistoryList = styled.div`
   }
   
   &::-webkit-scrollbar-track {
-    background: #1e1e2e;
+    background: rgba(10, 34, 25, 0.5);
   }
   
   &::-webkit-scrollbar-thumb {
-    background: #333;
+    background: linear-gradient(135deg, #d4af37, #f4d03f);
     border-radius: 4px;
   }
   
   &::-webkit-scrollbar-thumb:hover {
-    background: #444;
+    background: linear-gradient(135deg, #f4d03f, #d4af37);
   }
 `;
 
 const HistoryItem = styled.div`
   padding: 12px;
-  border-bottom: 1px solid #333;
-  transition: background-color 0.2s;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+  transition: all 0.3s ease;
   
   &:hover {
-    background-color: rgba(255, 255, 255, 0.05);
+    background: rgba(212, 175, 55, 0.1);
+    border-left: 3px solid #d4af37;
   }
   
   &:last-child {

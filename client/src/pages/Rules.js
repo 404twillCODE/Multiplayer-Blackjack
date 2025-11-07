@@ -7,26 +7,47 @@ const RulesContainer = styled.div`
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
-  padding: 2rem;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  padding: 120px 2rem 2rem;
+  background: linear-gradient(135deg, #0a0a0a 0%, #0a2219 50%, #000000 100%);
+  position: relative;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+      radial-gradient(circle at 20% 50%, rgba(212, 175, 55, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.1) 0%, transparent 50%);
+    pointer-events: none;
+  }
 `;
 
 const Card = styled.div`
-  background-color: rgba(30, 30, 46, 0.8);
-  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  border-radius: 16px;
   padding: 2rem;
   width: 100%;
   max-width: 800px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(212, 175, 55, 0.2);
   margin-bottom: 2rem;
+  backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 1;
 `;
 
 const Title = styled.h1`
   font-size: 2.5rem;
   margin-bottom: 2rem;
-  color: #e2b714;
+  color: #d4af37;
   text-align: center;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-weight: 700;
 `;
 
 const Section = styled.section`
@@ -36,24 +57,26 @@ const Section = styled.section`
 const SectionTitle = styled.h2`
   font-size: 1.5rem;
   margin-bottom: 1rem;
-  color: #e2b714;
-  border-bottom: 1px solid #333;
+  color: #d4af37;
+  border-bottom: 2px solid rgba(212, 175, 55, 0.3);
   padding-bottom: 0.5rem;
+  font-weight: 700;
 `;
 
 const List = styled.ul`
   margin-left: 1.5rem;
   margin-bottom: 1.5rem;
+  color: rgba(255, 255, 255, 0.9);
 `;
 
 const ListItem = styled.li`
   margin-bottom: 0.8rem;
-  line-height: 1.5;
+  line-height: 1.6;
 `;
 
 const BackButton = styled.button`
-  background-color: #2196f3;
-  color: white;
+  background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+  color: #0a2219;
   border: none;
   padding: 0.8rem 1.5rem;
   border-radius: 5px;

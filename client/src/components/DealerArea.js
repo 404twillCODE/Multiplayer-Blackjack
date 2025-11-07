@@ -11,25 +11,35 @@ const DealerContainer = styled.div`
 `;
 
 const DealerTitle = styled.div`
-  font-size: 1.2rem;
-  font-weight: 600;
-  padding: 5px 15px;
-  background-color: rgba(0, 0, 0, 0.7);
-  color: white;
+  font-size: 1.3rem;
+  font-weight: 700;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  color: #d4af37;
   border-radius: 20px;
-  margin-bottom: 10px;
+  margin-bottom: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 10px rgba(212, 175, 55, 0.3);
 `;
 
 const DealerScore = styled.span`
-  margin-left: 10px;
-  background-color: ${props => props.$score > 21 ? '#f44336' : props.$score >= 17 ? '#e2b714' : '#4caf50'};
-  color: ${props => props.$score > 21 ? 'white' : props.$score >= 17 ? 'black' : 'white'};
-  padding: 2px 8px;
-  border-radius: 10px;
+  margin-left: 12px;
+  background: ${props => props.$score > 21 
+    ? 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)' 
+    : props.$score >= 17 
+    ? 'linear-gradient(135deg, #d4af37 0%, #f4d03f 100%)' 
+    : 'linear-gradient(135deg, #4caf50 0%, #43a047 100%)'};
+  color: ${props => props.$score > 21 ? 'white' : props.$score >= 17 ? '#0a2219' : 'white'};
+  padding: 4px 12px;
+  border-radius: 12px;
   font-size: 0.9rem;
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 `;
 
 const CardArea = styled.div`
@@ -40,18 +50,25 @@ const CardArea = styled.div`
 `;
 
 const DealerStatus = styled.div`
-  margin-top: 5px;
+  margin-top: 8px;
   font-size: 0.9rem;
-  color: #e2b714;
+  color: #d4af37;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 `;
 
 const ScoreChip = styled.div`
   position: absolute;
   top: 45px;
   right: -15px;
-  background-color: #2c2c44;
-  color: ${props => props.$score > 21 ? '#f44336' : props.$score === 21 ? '#e2b714' : 'white'};
-  border: 1px solid ${props => props.$score > 21 ? '#f44336' : props.$score === 21 ? '#e2b714' : '#444'};
+  background: ${props => props.$score > 21 
+    ? 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)' 
+    : props.$score === 21 
+    ? 'linear-gradient(135deg, #d4af37 0%, #f4d03f 100%)' 
+    : 'linear-gradient(135deg, rgba(10, 34, 25, 0.9) 0%, rgba(0, 0, 0, 0.9) 100%)'};
+  color: ${props => props.$score > 21 ? 'white' : props.$score === 21 ? '#0a2219' : '#d4af37'};
+  border: 2px solid ${props => props.$score > 21 ? '#f44336' : props.$score === 21 ? '#d4af37' : 'rgba(212, 175, 55, 0.5)'};
   border-radius: 50%;
   width: 30px;
   height: 30px;
@@ -60,7 +77,7 @@ const ScoreChip = styled.div`
   align-items: center;
   font-weight: bold;
   font-size: 0.9rem;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
   z-index: 10;
 `;
 

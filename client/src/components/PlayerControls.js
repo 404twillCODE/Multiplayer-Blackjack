@@ -9,16 +9,18 @@ const ControlsContainer = styled.div`
   width: 100%;
   max-width: 600px;
   margin: 0 auto;
-  padding: 1rem;
-  background-color: rgba(30, 30, 46, 0.8);
-  border-radius: 10px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
 `;
 
 const ActionsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   margin-bottom: 1rem;
   
@@ -28,24 +30,27 @@ const ActionsGrid = styled.div`
 `;
 
 const ActionButton = styled.button`
-  padding: 0.8rem 0;
-  border-radius: 5px;
-  border: none;
+  padding: 1rem 0;
+  border-radius: 12px;
+  border: 2px solid transparent;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  text-transform: uppercase;
+  letter-spacing: 1px;
   
   &:hover:not(:disabled) {
     transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   }
   
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
   }
   
@@ -56,34 +61,70 @@ const ActionButton = styled.button`
 `;
 
 const HitButton = styled(ActionButton)`
-  background-color: #4caf50;
+  background: linear-gradient(135deg, #4caf50 0%, #43a047 100%);
   color: white;
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #43a047 0%, #4caf50 100%);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.6);
+  }
 `;
 
 const StandButton = styled(ActionButton)`
-  background-color: #f44336;
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
   color: white;
+  box-shadow: 0 4px 15px rgba(244, 67, 54, 0.4);
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #d32f2f 0%, #f44336 100%);
+    box-shadow: 0 6px 20px rgba(244, 67, 54, 0.6);
+  }
 `;
 
 const DoubleButton = styled(ActionButton)`
-  background-color: #2196f3;
+  background: linear-gradient(135deg, #2196f3 0%, #1e88e5 100%);
   color: white;
+  box-shadow: 0 4px 15px rgba(33, 150, 243, 0.4);
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #1e88e5 0%, #2196f3 100%);
+    box-shadow: 0 6px 20px rgba(33, 150, 243, 0.6);
+  }
 `;
 
 const SplitButton = styled(ActionButton)`
-  background-color: #ff9800;
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
   color: white;
+  box-shadow: 0 4px 15px rgba(255, 152, 0, 0.4);
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #f57c00 0%, #ff9800 100%);
+    box-shadow: 0 6px 20px rgba(255, 152, 0, 0.6);
+  }
 `;
 
 const SurrenderButton = styled(ActionButton)`
-  background-color: #9e9e9e;
+  background: linear-gradient(135deg, #757575 0%, #616161 100%);
   color: white;
+  box-shadow: 0 4px 15px rgba(117, 117, 117, 0.4);
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #616161 0%, #757575 100%);
+    box-shadow: 0 6px 20px rgba(117, 117, 117, 0.6);
+  }
 `;
 
 const NewRoundButton = styled(ActionButton)`
-  background-color: #9c27b0;
+  background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
   color: white;
   grid-column: span 2;
+  box-shadow: 0 4px 15px rgba(156, 39, 176, 0.4);
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%);
+    box-shadow: 0 6px 20px rgba(156, 39, 176, 0.6);
+  }
 `;
 
 const Icon = styled.span`
@@ -96,8 +137,8 @@ const ButtonText = styled.span`
 `;
 
 const HintContainer = styled.div`
-  background-color: rgba(226, 183, 20, 0.9);
-  color: #000;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.95) 0%, rgba(244, 208, 63, 0.95) 100%);
+  color: #0a2219;
   padding: 15px;
   border-radius: 5px;
   margin-bottom: 15px;

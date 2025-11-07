@@ -13,25 +13,34 @@ const SeatContainer = styled.div`
 
 const UsernameDisplay = styled.div`
   font-size: 1rem;
-  font-weight: 600;
-  padding: 5px 12px;
-  margin-bottom: 5px;
-  background-color: ${props => props.$isCurrentPlayer ? '#4caf50' : '#333'};
+  font-weight: 700;
+  padding: 8px 16px;
+  margin-bottom: 8px;
+  background: ${props => props.$isCurrentPlayer 
+    ? 'linear-gradient(135deg, #4caf50 0%, #43a047 100%)' 
+    : 'linear-gradient(135deg, rgba(10, 34, 25, 0.9) 0%, rgba(0, 0, 0, 0.9) 100%)'};
   color: white;
+  border: 2px solid ${props => props.$isCurrentPlayer ? '#4caf50' : 'rgba(212, 175, 55, 0.5)'};
   border-radius: 20px;
   text-align: center;
   min-width: 100px;
   z-index: 5;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 `;
 
 const BalanceDisplay = styled.div`
   font-size: 0.9rem;
-  padding: 4px 10px;
-  background-color: #2c2c44;
-  color: #e2b714;
-  border-radius: 4px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(10, 34, 25, 0.8) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  color: #d4af37;
+  border-radius: 8px;
   margin-bottom: 10px;
   z-index: 5;
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
 `;
 
 const CardArea = styled.div`
@@ -46,35 +55,47 @@ const BetCircle = styled.div`
   width: 70px;
   height: 70px;
   border-radius: 50%;
-  background-color: ${props => props.$active ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 255, 255, 0.1)'};
-  border: 2px solid ${props => props.$active ? '#4caf50' : '#444'};
+  background: ${props => props.$active 
+    ? 'linear-gradient(135deg, rgba(76, 175, 80, 0.3) 0%, rgba(67, 160, 71, 0.3) 100%)' 
+    : 'linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(10, 34, 25, 0.3) 100%)'};
+  border: 2px solid ${props => props.$active ? '#4caf50' : 'rgba(212, 175, 55, 0.5)'};
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
   margin-top: 10px;
   z-index: 1;
+  box-shadow: ${props => props.$active 
+    ? '0 0 20px rgba(76, 175, 80, 0.5)' 
+    : '0 0 10px rgba(212, 175, 55, 0.3)'};
 `;
 
 const BetAmount = styled.div`
-  background-color: #e2b714;
-  color: #000;
-  font-weight: bold;
-  padding: 3px 8px;
+  background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+  color: #0a2219;
+  font-weight: 700;
+  padding: 4px 10px;
   border-radius: 12px;
   font-size: 0.9rem;
   position: absolute;
   top: -15px;
   z-index: 6;
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 `;
 
 const ScoreChip = styled.div`
   position: absolute;
   top: 45px;
   right: -15px;
-  background-color: #2c2c44;
-  color: ${props => props.$score > 21 ? '#f44336' : props.$score === 21 ? '#e2b714' : 'white'};
-  border: 1px solid ${props => props.$score > 21 ? '#f44336' : props.$score === 21 ? '#e2b714' : '#444'};
+  background: ${props => props.$score > 21 
+    ? 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)' 
+    : props.$score === 21 
+    ? 'linear-gradient(135deg, #d4af37 0%, #f4d03f 100%)' 
+    : 'linear-gradient(135deg, rgba(10, 34, 25, 0.9) 0%, rgba(0, 0, 0, 0.9) 100%)'};
+  color: ${props => props.$score > 21 ? 'white' : props.$score === 21 ? '#0a2219' : '#d4af37'};
+  border: 2px solid ${props => props.$score > 21 ? '#f44336' : props.$score === 21 ? '#d4af37' : 'rgba(212, 175, 55, 0.5)'};
   border-radius: 50%;
   width: 30px;
   height: 30px;

@@ -15,19 +15,36 @@ const GameRoomContainer = styled.div`
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.8)), 
-              url('/images/table-background.jpg') no-repeat center center/cover;
+  background: linear-gradient(135deg, #0a0a0a 0%, #0a2219 50%, #000000 100%);
   color: white;
   overflow: hidden;
+  position: relative;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+      radial-gradient(circle at 20% 50%, rgba(212, 175, 55, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.1) 0%, transparent 50%);
+    pointer-events: none;
+  }
 `;
 
 const GameHeader = styled.header`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 25px;
-  background-color: rgba(0, 0, 0, 0.7);
-  border-bottom: 2px solid #144b2f;
+  padding: 15px 30px;
+  background: linear-gradient(180deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  backdrop-filter: blur(10px);
+  border-bottom: 2px solid #d4af37;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  position: relative;
+  z-index: 10;
 `;
 
 const RoomInfo = styled.div`
@@ -37,44 +54,61 @@ const RoomInfo = styled.div`
 `;
 
 const RoomTitle = styled.h1`
-  font-size: 22px;
-  color: #e5c687;
+  font-size: 24px;
+  color: #d4af37;
   margin: 0;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
 `;
 
 const RoomCode = styled.div`
-  background-color: #144b2f;
-  color: white;
-  padding: 6px 12px;
-  border-radius: 4px;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(10, 34, 25, 0.8) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  color: #d4af37;
+  padding: 8px 16px;
+  border-radius: 8px;
   font-size: 16px;
-  font-weight: bold;
-  letter-spacing: 1px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
 `;
 
 const PlayerCount = styled.div`
   display: flex;
   align-items: center;
-  color: #bbb;
+  color: rgba(255, 255, 255, 0.8);
   font-size: 14px;
+  font-weight: 500;
   
   svg {
     margin-right: 5px;
+    color: #d4af37;
   }
 `;
 
 const LeaveButton = styled.button`
-  background-color: #d32f2f;
+  background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
   color: white;
   border: none;
-  padding: 8px 15px;
-  border-radius: 4px;
-  font-weight: bold;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 700;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(211, 47, 47, 0.4);
   
   &:hover {
-    background-color: #b71c1c;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(211, 47, 47, 0.6);
+  }
+  
+  &:active {
+    transform: translateY(0);
   }
 `;
 
@@ -118,10 +152,14 @@ const ControlsSection = styled.div`
 
 const SidebarContainer = styled.div`
   width: 350px;
-  background-color: rgba(0, 0, 0, 0.8);
-  border-left: 2px solid #144b2f;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  border-left: 2px solid rgba(212, 175, 55, 0.5);
   display: flex;
   flex-direction: column;
+  backdrop-filter: blur(10px);
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.5);
+  position: relative;
+  z-index: 5;
 `;
 
 const StartGameButton = styled.button`
@@ -129,21 +167,28 @@ const StartGameButton = styled.button`
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background-color: #e5c687;
+  background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
   color: #0a2219;
   border: none;
-  padding: 15px 30px;
-  border-radius: 5px;
-  font-size: 18px;
-  font-weight: bold;
+  padding: 18px 40px;
+  border-radius: 12px;
+  font-size: 20px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 30px rgba(212, 175, 55, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  z-index: 20;
   
   &:hover {
-    background-color: #f0d498;
+    background: linear-gradient(135deg, #f4d03f 0%, #d4af37 100%);
     transform: translate(-50%, -52%);
-    box-shadow: 0 7px 20px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 12px 40px rgba(212, 175, 55, 0.6);
+  }
+  
+  &:active {
+    transform: translate(-50%, -50%);
   }
 `;
 
@@ -153,17 +198,23 @@ const WaitingMessage = styled.div`
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  color: #e5c687;
+  color: #d4af37;
+  z-index: 15;
   
   h2 {
-    font-size: 28px;
-    margin-bottom: 10px;
+    font-size: 32px;
+    margin-bottom: 15px;
+    font-weight: 700;
+    text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 2px;
   }
   
   p {
-    font-size: 16px;
-    color: #bbb;
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.8);
     max-width: 400px;
+    font-weight: 300;
   }
 `;
 
@@ -172,12 +223,14 @@ const ErrorMessage = styled.div`
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
-  background-color: rgba(211, 47, 47, 0.9);
+  background: linear-gradient(135deg, rgba(211, 47, 47, 0.95) 0%, rgba(183, 28, 28, 0.95) 100%);
   color: white;
-  padding: 12px 20px;
-  border-radius: 5px;
+  padding: 14px 24px;
+  border-radius: 8px;
   z-index: 1000;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 20px rgba(211, 47, 47, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  font-weight: 600;
 `;
 
 const HeaderControls = styled.div`
@@ -187,30 +240,38 @@ const HeaderControls = styled.div`
 `;
 
 const ToggleButton = styled.button`
-  background-color: ${props => props.$active ? '#4caf50' : '#f44336'};
+  background: ${props => props.$active 
+    ? 'linear-gradient(135deg, #4caf50 0%, #43a047 100%)' 
+    : 'linear-gradient(135deg, rgba(244, 67, 54, 0.8) 0%, rgba(183, 28, 28, 0.8) 100%)'};
   color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 6px 12px;
+  border: 2px solid ${props => props.$active ? '#4caf50' : 'rgba(244, 67, 54, 0.5)'};
+  border-radius: 8px;
+  padding: 8px 16px;
   font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 5px;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
   
   &:hover {
-    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   }
 `;
 
 const NewRoundButton = styled(StartGameButton)`
-  background-color: #9c27b0;
+  background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
   font-size: 22px;
   padding: 18px 35px;
   display: flex;
   align-items: center;
   gap: 12px;
+  
+  &:hover {
+    background: linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%);
+  }
 `;
 
 const ButtonIcon = styled.span`
@@ -222,28 +283,36 @@ const SpectatorsContainer = styled.div`
   position: absolute;
   top: 10px;
   right: 10px;
-  background-color: rgba(0, 0, 0, 0.7);
-  border-radius: 5px;
-  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  border-radius: 12px;
+  padding: 12px 16px;
   max-width: 200px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 15;
 `;
 
 const SpectatorsTitle = styled.div`
   font-size: 14px;
-  color: #e5c687;
-  margin-bottom: 5px;
+  color: #d4af37;
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
   gap: 5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 `;
 
 const SpectatorsList = styled.div`
   font-size: 12px;
-  color: #bbb;
+  color: rgba(255, 255, 255, 0.8);
 `;
 
 const SpectatorItem = styled.div`
-  margin: 2px 0;
+  margin: 4px 0;
+  padding: 4px 0;
 `;
 
 const BettingStatusContainer = styled.div`
@@ -251,24 +320,29 @@ const BettingStatusContainer = styled.div`
   bottom: 600px;
   left: 50%;
   transform: translateX(-50%);
-  background-color: rgba(0, 0, 0, 0.85);
-  border: 2px solid #e2b714;
-  border-radius: 15px;
-  padding: 15px 25px;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  border-radius: 16px;
+  padding: 20px 30px;
   z-index: 110;
   text-align: center;
   min-width: 300px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
 `;
 
 const BettingStatusTitle = styled.h2`
-  color: #e2b714;
+  color: #d4af37;
   margin: 0 0 15px 0;
   font-size: 1.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
 `;
 
 const BettingStatusList = styled.div`
@@ -282,32 +356,45 @@ const BettingStatusItem = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 15px;
-  background-color: rgba(255, 255, 255, 0.1);
+  padding: 10px 15px;
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.3);
   border-radius: 8px;
   color: white;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: rgba(212, 175, 55, 0.2);
+    border-color: rgba(212, 175, 55, 0.5);
+  }
 `;
 
 const BettingStatusBadge = styled.span`
-  padding: 4px 12px;
+  padding: 6px 14px;
   border-radius: 12px;
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   ${props => props.$hasBet ? `
-    background-color: #4caf50;
+    background: linear-gradient(135deg, #4caf50 0%, #43a047 100%);
     color: white;
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.4);
   ` : `
-    background-color: #ff9800;
+    background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
     color: white;
     animation: pulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 15px rgba(255, 152, 0, 0.4);
   `}
   
   @keyframes pulse {
     0%, 100% {
       opacity: 1;
+      transform: scale(1);
     }
     50% {
-      opacity: 0.6;
+      opacity: 0.7;
+      transform: scale(1.05);
     }
   }
 `;

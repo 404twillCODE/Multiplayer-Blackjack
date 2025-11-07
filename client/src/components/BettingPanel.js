@@ -6,12 +6,14 @@ const BettingContainer = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  background-color: rgba(30, 30, 46, 0.8);
-  padding: 1.5rem;
-  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  padding: 2rem;
+  border-radius: 16px;
   position: absolute;
   z-index: 100;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
   width: 380px;
   left: 50%;
   transform: translateX(-50%);
@@ -20,9 +22,13 @@ const BettingContainer = styled.div`
 
 const Title = styled.h3`
   margin-bottom: 1.5rem;
-  color: #e2b714;
+  color: #d4af37;
   text-align: center;
-  font-size: 1.3rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
 `;
 
 const CustomBetContainer = styled.div`
@@ -34,22 +40,26 @@ const CustomBetContainer = styled.div`
 `;
 
 const CustomBetInput = styled.input`
-  padding: 0.5rem;
-  border-radius: 5px;
-  border: 2px solid #2196f3;
-  background-color: rgba(0, 0, 0, 0.3);
+  padding: 0.7rem;
+  border-radius: 8px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  background-color: rgba(10, 34, 25, 0.8);
   color: white;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   width: 65%;
   text-align: center;
+  font-weight: 600;
+  transition: all 0.3s ease;
   
   &:focus {
     outline: none;
-    border-color: #e2b714;
+    border-color: #d4af37;
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
+    background-color: rgba(10, 34, 25, 1);
   }
   
   &::placeholder {
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
   }
 `;
 
@@ -75,88 +85,103 @@ const Button = styled.button`
 `;
 
 const ApplyCustomBetButton = styled(Button)`
-  background-color: #2196f3;
-  color: white;
-  padding: 0.5rem;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.8) 0%, rgba(244, 208, 63, 0.8) 100%);
+  color: #0a2219;
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  padding: 0.6rem;
   width: 35%;
   font-size: 0.85rem;
+  font-weight: 700;
+  
+  &:hover {
+    background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+  }
 `;
 
 const ChipsContainer = styled.div`
   display: flex;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 1.5rem;
   flex-wrap: wrap;
 `;
 
 const Chip = styled.div`
-  width: 50px;
-  height: 50px;
+  width: 55px;
+  height: 55px;
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
-  font-weight: bold;
+  font-weight: 700;
   cursor: pointer;
   user-select: none;
-  transition: all 0.2s;
-  border: 2px dashed transparent;
+  transition: all 0.3s ease;
+  border: 3px solid transparent;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   
   &:hover {
-    transform: translateY(-5px);
+    transform: translateY(-5px) scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   }
   
   ${props => props.selected && `
-    border: 2px dashed white;
-    transform: translateY(-5px);
+    border: 3px solid #d4af37;
+    transform: translateY(-5px) scale(1.15);
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.6);
   `}
   
   ${props => props.disabled && `
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
     &:hover {
       transform: none;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     }
   `}
 `;
 
 const RedChip = styled(Chip)`
-  background-color: #f44336;
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
   color: white;
 `;
 
 const BlueChip = styled(Chip)`
-  background-color: #2196f3;
+  background: linear-gradient(135deg, #2196f3 0%, #1e88e5 100%);
   color: white;
 `;
 
 const GreenChip = styled(Chip)`
-  background-color: #4caf50;
+  background: linear-gradient(135deg, #4caf50 0%, #43a047 100%);
   color: white;
 `;
 
 const BlackChip = styled(Chip)`
-  background-color: #212121;
-  color: white;
+  background: linear-gradient(135deg, #212121 0%, #000000 100%);
+  color: #d4af37;
+  border: 2px solid rgba(212, 175, 55, 0.5);
 `;
 
 const PurpleChip = styled(Chip)`
-  background-color: #9c27b0;
+  background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
   color: white;
 `;
 
 const GoldChip = styled(Chip)`
-  background-color: #ffc107;
-  color: #212121;
-  font-size: 0.8rem;
+  background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+  color: #0a2219;
+  font-size: 0.85rem;
+  border: 2px solid rgba(212, 175, 55, 0.8);
 `;
 
 const BetDisplay = styled.div`
-  font-size: 1.5rem;
+  font-size: 1.8rem;
   margin-bottom: 1.5rem;
-  font-weight: bold;
-  color: #e2b714;
+  font-weight: 700;
+  color: #d4af37;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 1px;
 `;
 
 const ButtonsContainer = styled.div`
@@ -167,18 +192,45 @@ const ButtonsContainer = styled.div`
 `;
 
 const PlaceBetButton = styled(Button)`
-  background-color: #4caf50;
+  background: linear-gradient(135deg, #4caf50 0%, #43a047 100%);
   color: white;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #43a047 0%, #4caf50 100%);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.6);
+  }
 `;
 
 const ClearButton = styled(Button)`
-  background-color: #2196f3;
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
   color: white;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(244, 67, 54, 0.4);
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #d32f2f 0%, #f44336 100%);
+    box-shadow: 0 6px 20px rgba(244, 67, 54, 0.6);
+  }
 `;
 
 const RepeatBetButton = styled(Button)`
-  background-color: #2196f3;
-  color: white;
+  background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+  color: #0a2219;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #f4d03f 0%, #d4af37 100%);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.6);
+  }
 `;
 
 const BettingPanel = ({ onBetComplete, playerBalance }) => {

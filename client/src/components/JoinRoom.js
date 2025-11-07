@@ -3,19 +3,25 @@ import styled from 'styled-components';
 import { useGame } from '../contexts/GameContext';
 
 const JoinContainer = styled.div`
-  background-color: rgba(0, 0, 0, 0.8);
-  border-radius: 10px;
-  padding: 30px;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  border-radius: 16px;
+  padding: 40px;
   max-width: 500px;
   width: 100%;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
 `;
 
 const Title = styled.h2`
-  color: #e5c687;
+  color: #d4af37;
   text-align: center;
-  margin-bottom: 25px;
-  font-size: 28px;
+  margin-bottom: 30px;
+  font-size: 32px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
 `;
 
 const Form = styled.form`
@@ -31,22 +37,31 @@ const InputGroup = styled.div`
 `;
 
 const Label = styled.label`
-  color: #e5c687;
+  color: #d4af37;
   font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
 `;
 
 const Input = styled.input`
-  padding: 12px;
-  border-radius: 5px;
-  border: 2px solid #144b2f;
-  background-color: #0a2219;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  background-color: rgba(10, 34, 25, 0.8);
   color: white;
   font-size: 16px;
-  transition: border-color 0.3s;
+  transition: all 0.3s ease;
   
   &:focus {
     outline: none;
-    border-color: #e5c687;
+    border-color: #d4af37;
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
+    background-color: rgba(10, 34, 25, 1);
+  }
+  
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.4);
   }
 `;
 
@@ -76,20 +91,31 @@ const Button = styled.button`
 `;
 
 const CreateButton = styled(Button)`
-  background-color: #e5c687;
+  background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
   color: #0a2219;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
   
   &:hover {
-    background-color: #f0d498;
+    background: linear-gradient(135deg, #f4d03f 0%, #d4af37 100%);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.6);
   }
 `;
 
 const JoinButton = styled(Button)`
-  background-color: #144b2f;
-  color: white;
+  background: linear-gradient(135deg, rgba(20, 75, 47, 0.8) 0%, rgba(10, 34, 25, 0.9) 100%);
+  color: #d4af37;
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
   
   &:hover {
-    background-color: #1a6340;
+    background: linear-gradient(135deg, rgba(20, 75, 47, 1) 0%, rgba(10, 34, 25, 1) 100%);
+    border-color: #d4af37;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
   }
 `;
 
@@ -137,7 +163,7 @@ const JoinRoom = () => {
   
   return (
     <JoinContainer>
-      <Title>Multiplayer Blackjack</Title>
+      <Title>Join the Game</Title>
       <Form>
         <InputGroup>
           <Label htmlFor="username">Username</Label>

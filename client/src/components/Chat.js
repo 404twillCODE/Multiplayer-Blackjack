@@ -6,28 +6,34 @@ const ChatContainer = styled.div`
   display: flex;
   flex-direction: column;
   height: 50%;
-  border-bottom: 1px solid #333;
+  border-bottom: 2px solid rgba(212, 175, 55, 0.3);
 `;
 
 const ChatHeader = styled.div`
-  padding: 12px;
-  font-weight: 600;
-  color: #e2b714;
+  padding: 15px;
+  font-weight: 700;
+  color: #d4af37;
   display: flex;
   align-items: center;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.5) 0%, rgba(0, 0, 0, 0.5) 100%);
+  border-bottom: 2px solid rgba(212, 175, 55, 0.3);
   
   svg {
     margin-right: 8px;
+    color: #d4af37;
   }
 `;
 
 const MessagesContainer = styled.div`
   flex-grow: 1;
   overflow-y: auto;
-  padding: 10px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  background: rgba(10, 34, 25, 0.3);
   
   /* Scrollbar styling */
   &::-webkit-scrollbar {
@@ -35,47 +41,54 @@ const MessagesContainer = styled.div`
   }
   
   &::-webkit-scrollbar-track {
-    background: #1e1e2e;
+    background: rgba(10, 34, 25, 0.5);
   }
   
   &::-webkit-scrollbar-thumb {
-    background: #333;
+    background: linear-gradient(135deg, #d4af37, #f4d03f);
     border-radius: 4px;
   }
   
   &::-webkit-scrollbar-thumb:hover {
-    background: #444;
+    background: linear-gradient(135deg, #f4d03f, #d4af37);
   }
 `;
 
 const MessageBubble = styled.div`
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: 12px;
   max-width: 80%;
   word-wrap: break-word;
   
   ${props => props.type === 'system' && `
     align-self: center;
-    background-color: rgba(46, 46, 46, 0.7);
-    color: #aaa;
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(10, 34, 25, 0.5) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    color: #d4af37;
     font-style: italic;
     font-size: 0.9rem;
     max-width: 100%;
     text-align: center;
+    font-weight: 500;
   `}
   
   ${props => props.type === 'message' && `
-    align-self: ${props.isMine ? 'flex-end' : 'flex-start'};
-    background-color: ${props.isMine ? '#1A6340' : '#2C2C44'};
+    align-self: ${props.$isMine ? 'flex-end' : 'flex-start'};
+    background: ${props.$isMine 
+      ? 'linear-gradient(135deg, rgba(20, 75, 47, 0.9) 0%, rgba(10, 34, 25, 0.9) 100%)' 
+      : 'linear-gradient(135deg, rgba(10, 34, 25, 0.9) 0%, rgba(0, 0, 0, 0.9) 100%)'};
+    border: 1px solid ${props.$isMine ? 'rgba(76, 175, 80, 0.5)' : 'rgba(212, 175, 55, 0.3)'};
     color: white;
   `}
 `;
 
 const MessageSender = styled.div`
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.8rem;
-  margin-bottom: 2px;
-  color: ${props => props.isMine ? '#90EE90' : '#e2b714'};
+  margin-bottom: 4px;
+  color: ${props => props.$isMine ? '#90EE90' : '#d4af37'};
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 `;
 
 const MessageTime = styled.span`
@@ -86,46 +99,57 @@ const MessageTime = styled.span`
 
 const InputContainer = styled.form`
   display: flex;
-  padding: 10px;
-  background-color: #1E1E2E;
+  padding: 12px;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.8) 0%, rgba(0, 0, 0, 0.8) 100%);
+  border-top: 2px solid rgba(212, 175, 55, 0.3);
 `;
 
 const ChatInput = styled.input`
   flex-grow: 1;
-  padding: 10px 12px;
-  border-radius: 4px;
-  border: 1px solid #333;
-  background-color: #16162B;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  background-color: rgba(10, 34, 25, 0.8);
   color: white;
   font-size: 0.9rem;
+  transition: all 0.3s ease;
   
   &:focus {
     outline: none;
-    border-color: #e2b714;
+    border-color: #d4af37;
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
+    background-color: rgba(10, 34, 25, 1);
   }
   
   &::placeholder {
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.4);
   }
 `;
 
 const SendButton = styled.button`
-  background-color: #1A6340;
-  color: white;
+  background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+  color: #0a2219;
   border: none;
-  border-radius: 4px;
-  padding: 0 15px;
+  border-radius: 8px;
+  padding: 0 20px;
   margin-left: 8px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
   
-  &:hover {
-    background-color: #144B2F;
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #f4d03f 0%, #d4af37 100%);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.6);
+    transform: translateY(-2px);
   }
   
   &:disabled {
-    background-color: #333;
+    background: rgba(117, 117, 117, 0.5);
     cursor: not-allowed;
+    box-shadow: none;
   }
 `;
 
@@ -167,10 +191,10 @@ const Chat = () => {
           <MessageBubble 
             key={index} 
             type={message.type} 
-            isMine={message.sender === username}
+            $isMine={message.sender === username}
           >
             {message.type === 'message' && (
-              <MessageSender isMine={message.sender === username}>
+              <MessageSender $isMine={message.sender === username}>
                 {message.sender}
                 <MessageTime>{formatTime(message.timestamp)}</MessageTime>
               </MessageSender>
