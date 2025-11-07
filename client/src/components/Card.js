@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, css } from 'styled-components';
 
 // Animation: Card flying smoothly from dealer position (top center) to player position
 // Simplified for better performance and less stuttering
@@ -11,6 +11,18 @@ const dealCard = keyframes`
   to {
     transform: translateY(0) rotate(0deg) scale(1);
     opacity: 1;
+  }
+`;
+
+// Animation: Card being picked up by dealer (flying back to dealer position)
+const pickupCard = keyframes`
+  from {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(0, -50vh) rotate(180deg) scale(0.3);
+    opacity: 0;
   }
 `;
 
@@ -31,10 +43,19 @@ const CardContainer = styled.div`
   user-select: none;
   backface-visibility: hidden;
   perspective: 1000px;
-  animation: ${props => props.$isNewCard ? dealCard : 'none'} 0.4s ease-out forwards;
-  opacity: ${props => props.$isNewCard ? 0 : 1};
-  ${props => props.$isNewCard ? `
+  animation: ${props => {
+    if (props.$isPickedUp) return css`${pickupCard} 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards`;
+    if (props.$isNewCard) return css`${dealCard} 0.4s ease-out forwards`;
+    return 'none';
+  }};
+  opacity: ${props => {
+    if (props.$isPickedUp) return 1;
+    if (props.$isNewCard) return 0;
+    return 1;
+  }};
+  ${props => (props.$isNewCard || props.$isPickedUp) ? css`
     will-change: transform, opacity;
+    transition: transform 0.1s ease-out, opacity 0.1s ease-out;
   ` : ''}
   
   &:hover {
@@ -143,8 +164,9 @@ const getCardValue = (value) => {
   }
 };
 
-const Card = ({ card, hidden = false, isNewCard = false }) => {
+const Card = ({ card, hidden = false, isNewCard = false, isPickedUp = false, pickupDelay = 0 }) => {
   const [shouldAnimate, setShouldAnimate] = useState(isNewCard);
+  const [shouldPickup, setShouldPickup] = useState(false);
   
   useEffect(() => {
     if (isNewCard) {
@@ -157,12 +179,21 @@ const Card = ({ card, hidden = false, isNewCard = false }) => {
     }
   }, [isNewCard]);
   
+  useEffect(() => {
+    if (isPickedUp && pickupDelay >= 0) {
+      const timer = setTimeout(() => {
+        setShouldPickup(true);
+      }, pickupDelay);
+      return () => clearTimeout(timer);
+    }
+  }, [isPickedUp, pickupDelay]);
+  
   if (!card && !hidden) return null;
   
   // If card is hidden, just show the back
   if (hidden) {
     return (
-      <CardContainer $hidden={true} $isNewCard={shouldAnimate}>
+      <CardContainer $hidden={true} $isNewCard={shouldAnimate} $isPickedUp={shouldPickup}>
         <CardPattern $hidden={true} />
         <CardBack $hidden={true} />
       </CardContainer>
@@ -175,7 +206,7 @@ const Card = ({ card, hidden = false, isNewCard = false }) => {
   const displayValue = getCardValue(value);
   
   return (
-    <CardContainer $color={color} $isNewCard={shouldAnimate}>
+    <CardContainer $color={color} $isNewCard={shouldAnimate} $isPickedUp={shouldPickup}>
       <CardTop>
         <CardValue>{displayValue}</CardValue>
         <CardSuit>{suitSymbol}</CardSuit>

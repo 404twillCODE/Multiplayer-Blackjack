@@ -206,14 +206,23 @@ const PlayerSeat = ({
   isPlayerTurn,
   gameState,
   isHost,
-  onKick
+  onKick,
+  isPickingUpCards = false,
+  playerIndex = 0
 }) => {
   if (!player) return <SeatContainer />;
   
   const { username, balance, cards, bet, status, score } = player;
   
+  // Check if this is a split hand
+  const isSplitHand = player.id.includes('-split');
+  
   // Check if this is a split hand belonging to the current player
-  const isSplitHandOfCurrentPlayer = player.id.includes('-split') && isCurrentPlayer;
+  const isSplitHandOfCurrentPlayer = isSplitHand && isCurrentPlayer;
+  
+  // For split hands, use the parent player's index for animation timing
+  // Split hands should animate with their parent player (playerIndex is already set correctly from parent)
+  const effectivePlayerIndex = playerIndex;
   
   // Show kick button only if:
   // - User is host
@@ -265,8 +274,20 @@ const PlayerSeat = ({
       <CardArea>
         {cards && cards.map((card, index) => {
           // Check if this is the newest card (last card in array)
-          const isNewCard = index === cards.length - 1;
-          return <Card key={`${card.suit}-${card.value}-${index}`} card={card} isNewCard={isNewCard} />;
+          const isNewCard = index === cards.length - 1 && !isPickingUpCards;
+          // Calculate pickup delay: all cards from same player animate together
+          // Each player's cards animate as a group, then move to next player
+          // All cards from a player (including split hands) get the same delay based on player index
+          const pickupDelay = isPickingUpCards ? effectivePlayerIndex * 300 : 0;
+          return (
+            <Card 
+              key={`${card.suit}-${card.value}-${index}`} 
+              card={card} 
+              isNewCard={isNewCard}
+              isPickedUp={isPickingUpCards}
+              pickupDelay={pickupDelay}
+            />
+          );
         })}
       </CardArea>
       

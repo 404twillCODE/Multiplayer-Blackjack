@@ -98,9 +98,15 @@ const CreateButton = styled(Button)`
   letter-spacing: 1px;
   box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
   
-  &:hover {
+  &:hover:not(:disabled) {
     background: linear-gradient(135deg, #f4d03f 0%, #d4af37 100%);
     box-shadow: 0 6px 20px rgba(212, 175, 55, 0.6);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: linear-gradient(135deg, #666 0%, #555 100%);
   }
 `;
 
@@ -112,10 +118,17 @@ const JoinButton = styled(Button)`
   text-transform: uppercase;
   letter-spacing: 1px;
   
-  &:hover {
+  &:hover:not(:disabled) {
     background: linear-gradient(135deg, rgba(20, 75, 47, 1) 0%, rgba(10, 34, 25, 1) 100%);
     border-color: #d4af37;
     box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: linear-gradient(135deg, rgba(50, 50, 50, 0.8) 0%, rgba(30, 30, 30, 0.9) 100%);
+    border-color: rgba(100, 100, 100, 0.5);
   }
 `;
 
@@ -126,11 +139,25 @@ const ErrorMessage = styled.div`
   font-size: 14px;
 `;
 
+const ConnectionStatus = styled.div`
+  text-align: center;
+  margin-bottom: 20px;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  background: ${props => props.$connected 
+    ? 'rgba(76, 175, 80, 0.2)' 
+    : 'rgba(244, 67, 54, 0.2)'};
+  color: ${props => props.$connected ? '#4caf50' : '#f44336'};
+  border: 2px solid ${props => props.$connected ? '#4caf50' : '#f44336'};
+`;
+
 const JoinRoom = () => {
   const [username, setUsername] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [localError, setLocalError] = useState(null);
-  const { createRoom, joinRoom, error } = useGame();
+  const { createRoom, joinRoom, error, connected, socket } = useGame();
   
   const handleCreateRoom = (e) => {
     e.preventDefault();
@@ -164,6 +191,13 @@ const JoinRoom = () => {
   return (
     <JoinContainer>
       <Title>Join the Game</Title>
+      <ConnectionStatus $connected={connected}>
+        {connected ? (
+          <span>🟢 Connected to server</span>
+        ) : (
+          <span>🔴 Not connected - {error || 'Connecting...'}</span>
+        )}
+      </ConnectionStatus>
       <Form>
         <InputGroup>
           <Label htmlFor="username">Username</Label>
@@ -190,8 +224,12 @@ const JoinRoom = () => {
         </InputGroup>
         
         <ButtonGroup>
-          <CreateButton onClick={handleCreateRoom}>Create New Room</CreateButton>
-          <JoinButton onClick={handleJoinRoom}>Join Room</JoinButton>
+          <CreateButton onClick={handleCreateRoom} disabled={!connected}>
+            Create New Room
+          </CreateButton>
+          <JoinButton onClick={handleJoinRoom} disabled={!connected}>
+            Join Room
+          </JoinButton>
         </ButtonGroup>
         
         {(localError || error) && (

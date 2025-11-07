@@ -233,6 +233,47 @@ const ErrorMessage = styled.div`
   font-weight: 600;
 `;
 
+const RoundEndedMessage = styled.div`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 200;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  border: 3px solid #d4af37;
+  border-radius: 20px;
+  padding: 30px 50px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 30px rgba(212, 175, 55, 0.4);
+  backdrop-filter: blur(10px);
+  animation: pulse 1.5s ease-in-out infinite;
+  
+  @keyframes pulse {
+    0%, 100% {
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 30px rgba(212, 175, 55, 0.4);
+    }
+    50% {
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 50px rgba(212, 175, 55, 0.6);
+    }
+  }
+  
+  h2 {
+    font-size: 36px;
+    margin-bottom: 10px;
+    font-weight: 700;
+    color: #d4af37;
+    text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+  
+  p {
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 400;
+  }
+`;
+
 const HeaderControls = styled.div`
   display: flex;
   align-items: center;
@@ -261,22 +302,6 @@ const ToggleButton = styled.button`
   }
 `;
 
-const NewRoundButton = styled(StartGameButton)`
-  background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
-  font-size: 22px;
-  padding: 18px 35px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  
-  &:hover {
-    background: linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%);
-  }
-`;
-
-const ButtonIcon = styled.span`
-  font-size: 24px;
-`;
 
 // Add new styled components for spectators
 const SpectatorsContainer = styled.div`
@@ -405,7 +430,7 @@ const GameRoom = () => {
     connected, roomId, players, dealer, gameState, error,
     startGame, leaveRoom, getCurrentPlayer, isPlayerTurn, currentTurn,
     hintsEnabled, toggleHints, autoSkipNewRound, setAutoSkipNewRound,
-    startNewRound, kickPlayer, socket
+    startNewRound, kickPlayer, socket, isPickingUpCards
   } = useGame();
   
   // Debug: Log when players array changes
@@ -530,6 +555,15 @@ const GameRoom = () => {
       const isSplitHandOfCurrentPlayer = player.originalPlayer === currentPlayer?.id;
       const isThisCurrentPlayer = isMainPlayer || isSplitHandOfCurrentPlayer;
       
+      // For split hands, find the parent player's index for animation timing
+      let animationPlayerIndex = index;
+      if (player.id.includes('-split') && player.originalPlayer) {
+        const parentPlayerIndex = activePlayers.findIndex(p => p.id === player.originalPlayer);
+        if (parentPlayerIndex !== -1) {
+          animationPlayerIndex = parentPlayerIndex;
+        }
+      }
+      
       return (
         <PlayerSeat 
           key={player.id}
@@ -540,6 +574,8 @@ const GameRoom = () => {
           gameState={gameState}
           isHost={isHost}
           onKick={handleKickPlayer}
+          isPickingUpCards={isPickingUpCards}
+          playerIndex={animationPlayerIndex}
         />
       );
     });
@@ -605,11 +641,6 @@ const GameRoom = () => {
       />;
     } else if (gameState === 'playing' && isPlayerTurn() && !hasBlackjack) {
       return <PlayerControls currentPlayer={activePlayer} canSplit={canSplit} />;
-    } else if (gameState === 'ended' && isHost && currentPlayer?.balance > 0 && currentPlayer?.status !== 'spectating') {
-      return <NewRoundButton onClick={startNewRound}>
-        <ButtonIcon>🔄</ButtonIcon>
-        Start New Round
-      </NewRoundButton>;
     }
     
     // If it's not the player's turn or they have blackjack, don't show controls
@@ -660,14 +691,22 @@ const GameRoom = () => {
       <GameContent>
         <GameTable>
           <DealerSection>
-            {(gameState === 'playing' || gameState === 'ended') && (
-              <DealerArea dealer={dealer} gameState={gameState} currentTurn={currentTurn} />
+            {(gameState === 'playing' || gameState === 'ended' || isPickingUpCards) && (
+              <DealerArea dealer={dealer} gameState={gameState} currentTurn={currentTurn} isPickingUpCards={isPickingUpCards} players={players} />
             )}
           </DealerSection>
           
           <PlayersSection>
             {renderPlayerSeats()}
           </PlayersSection>
+          
+          {/* Round Ended Message */}
+          {isPickingUpCards && (
+            <RoundEndedMessage>
+              <h2>🎴 Round Ended</h2>
+              <p>Dealer is collecting cards...</p>
+            </RoundEndedMessage>
+          )}
           
           <ControlsSection>
             {renderControls()}

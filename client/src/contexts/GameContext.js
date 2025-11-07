@@ -24,6 +24,7 @@ export const GameProvider = ({ children }) => {
   const [lastBet, setLastBet] = useState(0);
   const [hintsEnabled, setHintsEnabled] = useState(true);
   const [autoSkipNewRound, setAutoSkipNewRound] = useState(true);
+  const [isPickingUpCards, setIsPickingUpCards] = useState(false);
   const navigate = useNavigate();
 
   // Helper function to add messages to the chat
@@ -54,33 +55,113 @@ export const GameProvider = ({ children }) => {
 
   // Connect to socket server
   useEffect(() => {
-    const newSocket = io(SOCKET_SERVER);
-    
-    newSocket.on('connect', () => {
-      setSocket(newSocket);
-      setConnected(true);
-      console.log('Connected to server');
+    console.log('🔌 [GameContext] Connecting to server:', SOCKET_SERVER);
+    const newSocket = io(SOCKET_SERVER, {
+      transports: ['polling', 'websocket'], // Try polling first, then websocket
+      reconnection: true,
+      reconnectionDelay: 2000,
+      reconnectionAttempts: 10,
+      timeout: 30000,
+      forceNew: true,
+      upgrade: true,
+      rememberUpgrade: false
     });
     
-    newSocket.on('disconnect', () => {
+    // Set socket immediately so it's available even if not connected yet
+    setSocket(newSocket);
+    
+    // Log all connection-related events
+    newSocket.io.on('error', (error) => {
+      console.error('❌ [GameContext] IO error:', error);
+    });
+    
+    newSocket.io.on('reconnect_attempt', () => {
+      console.log('🔄 [GameContext] IO reconnection attempt');
+    });
+    
+    newSocket.io.on('reconnect', () => {
+      console.log('✅ [GameContext] IO reconnected');
+    });
+    
+    newSocket.io.on('reconnect_failed', () => {
+      console.error('❌ [GameContext] IO reconnection failed');
+    });
+    
+    newSocket.on('connect', () => {
+      setConnected(true);
+      console.log('✅ [GameContext] Connected to server:', SOCKET_SERVER, 'Socket ID:', newSocket.id);
+      setError(null); // Clear any previous errors
+    });
+    
+    newSocket.on('connect_error', (error) => {
+      console.error('❌ [GameContext] Connection error:', error);
+      console.error('❌ [GameContext] Error details:', {
+        message: error.message,
+        type: error.type,
+        description: error.description,
+        context: error.context,
+        errno: error.errno,
+        code: error.code
+      });
       setConnected(false);
-      console.log('Disconnected from server');
+      const errorMsg = error.message || 'Connection refused';
+      setError(`Failed to connect to server: ${errorMsg}. The server may be sleeping. Try visiting https://multiplayer-blackjack-7df9.onrender.com to wake it up, then refresh this page.`);
+    });
+    
+    newSocket.on('reconnect_attempt', (attemptNumber) => {
+      console.log(`🔄 [GameContext] Reconnection attempt ${attemptNumber}`);
+    });
+    
+    newSocket.on('reconnect', (attemptNumber) => {
+      console.log(`✅ [GameContext] Reconnected after ${attemptNumber} attempts`);
+      setConnected(true);
+      setError(null);
+    });
+    
+    newSocket.on('reconnect_error', (error) => {
+      console.error('❌ [GameContext] Reconnection error:', error);
+    });
+    
+    newSocket.on('reconnect_failed', () => {
+      console.error('❌ [GameContext] Reconnection failed after all attempts');
+      setError('Unable to connect to server. Please check if the server is running and refresh the page.');
+    });
+    
+    newSocket.on('disconnect', (reason) => {
+      setConnected(false);
+      console.log('⚠️ [GameContext] Disconnected from server. Reason:', reason);
+      if (reason === 'io server disconnect') {
+        setError('Disconnected by server. Please refresh the page.');
+      }
     });
     
     newSocket.on('error', (data) => {
-      console.error('Socket error event:', data);
-      setError(data.message);
+      console.error('❌ [GameContext] Socket error event:', data);
+      setError(data.message || 'An error occurred');
       setTimeout(() => setError(null), 5000);
     });
     
     // Listen for all socket events for debugging
     newSocket.onAny((eventName, ...args) => {
-      if (eventName === 'kick_player' || eventName === 'error' || eventName.includes('kick')) {
-        console.log('Socket event received:', eventName, args);
+      if (eventName === 'kick_player' || eventName === 'error' || eventName.includes('kick') || eventName.includes('connect')) {
+        console.log('🔍 [GameContext] Socket event received:', eventName, args);
       }
     });
     
+    // Check connection status after a short delay
+    setTimeout(() => {
+      console.log('🔍 [GameContext] Connection status check:', {
+        connected: newSocket.connected,
+        disconnected: newSocket.disconnected,
+        id: newSocket.id
+      });
+      if (!newSocket.connected) {
+        console.warn('⚠️ [GameContext] Socket not connected after initialization');
+      }
+    }, 2000);
+    
     return () => {
+      console.log('🧹 [GameContext] Cleaning up socket connection');
       newSocket.disconnect();
     };
   }, []);
@@ -360,50 +441,55 @@ export const GameProvider = ({ children }) => {
     
     socket.on('game_ended', (data) => {
       if (!data) return;
-      setGameState('ended');
-      setDealer(data.dealer || { cards: [], score: 0 });
-      setPlayers(data.players || []);
-      setCurrentTurn(null);
       
-      // Update game history
-      const historyEntry = {
-        id: Date.now(),
-        dealer: data.dealer,
-        players: data.players,
-        results: data.result?.results || [],
-        timestamp: Date.now()
-      };
-      setGameHistory(prev => [historyEntry, ...prev].slice(0, 10));
+      // Store the final game data for after animation
+      const finalData = data;
       
-      // Add system message
-      let resultMessage = 'Round ended. Check your results!';
-      if (data.result && data.result.results) {
-        const resultSummary = data.result.results
-          .map(r => `${r.username}: ${r.outcome} (${r.amountChange >= 0 ? '+' : ''}${r.amountChange})`)
-          .join(', ');
-        resultMessage = `Round ended. Results: ${resultSummary}`;
-      }
+      // Start the card pickup animation
+      setIsPickingUpCards(true);
       
-      addMessage({
-        content: resultMessage,
-        type: 'system',
-        timestamp: Date.now()
-      });
-      
-      // If host has auto-next round enabled, automatically start a new round immediately
-      if (autoSkipNewRound && socket.id === players[0]?.id) {
-        console.log("Auto next round enabled, starting new round immediately");
-        console.log("Current socket ID:", socket.id);
-        console.log("Host ID (players[0].id):", players[0]?.id);
-        console.log("autoSkipNewRound value:", autoSkipNewRound);
-        startNewRound();
-      } else {
-        console.log("Auto next round not triggered because:");
-        console.log("- autoSkipNewRound:", autoSkipNewRound);
-        console.log("- Is current player the host:", socket.id === players[0]?.id);
-        console.log("- Current socket ID:", socket.id);
-        console.log("- Host ID (players[0].id):", players[0]?.id);
-      }
+      // Wait for animation to complete before updating state
+      // Animation takes ~1.5 seconds (600ms per card + delays)
+      setTimeout(() => {
+        setGameState('ended');
+        setDealer(finalData.dealer || { cards: [], score: 0 });
+        setPlayers(finalData.players || []);
+        setCurrentTurn(null);
+        setIsPickingUpCards(false);
+        
+        // Update game history
+        const historyEntry = {
+          id: Date.now(),
+          dealer: finalData.dealer,
+          players: finalData.players,
+          results: finalData.result?.results || [],
+          timestamp: Date.now()
+        };
+        setGameHistory(prev => [historyEntry, ...prev].slice(0, 10));
+        
+        // Add system message
+        let resultMessage = 'Round ended. Check your results!';
+        if (finalData.result && finalData.result.results) {
+          const resultSummary = finalData.result.results
+            .map(r => `${r.username}: ${r.outcome} (${r.amountChange >= 0 ? '+' : ''}${r.amountChange})`)
+            .join(', ');
+          resultMessage = `Round ended. Results: ${resultSummary}`;
+        }
+        
+        addMessage({
+          content: resultMessage,
+          type: 'system',
+          timestamp: Date.now()
+        });
+        
+        // If host has auto-next round enabled, automatically start a new round after animation
+        if (autoSkipNewRound && socket.id === players[0]?.id) {
+          console.log("Auto next round enabled, starting new round after animation");
+          setTimeout(() => {
+            startNewRound();
+          }, 500);
+        }
+      }, 2000); // Wait 2 seconds for all cards to animate
     });
     
     socket.on('new_round', (data) => {
@@ -493,10 +579,23 @@ export const GameProvider = ({ children }) => {
   
   // Game actions
   const createRoom = (username, initialBalance = 1000) => {
-    if (!connected) return;
+    console.log('🔵 [createRoom] Attempting to create room:', { username, connected, socket: socket?.id, socketConnected: socket?.connected });
+    
+    if (!connected || !socket) {
+      console.error('❌ [createRoom] Cannot create room: not connected or socket not initialized', { connected, socket: !!socket });
+      setError('Not connected to server. Please wait a moment and try again.');
+      return;
+    }
+    
+    if (!socket.connected) {
+      console.error('❌ [createRoom] Socket not connected:', { socketId: socket.id, connected: socket.connected });
+      setError('Connection lost. Please refresh the page.');
+      return;
+    }
     
     setUsername(username);
     setBalance(initialBalance);
+    console.log('✅ [createRoom] Emitting create_room event');
     socket.emit('create_room', { username, balance: initialBalance });
   };
   
@@ -799,7 +898,8 @@ export const GameProvider = ({ children }) => {
         getCurrentPlayer,
         toggleHints,
         setAutoSkipNewRound,
-        socket
+        socket,
+        isPickingUpCards
       }}
     >
       {children}

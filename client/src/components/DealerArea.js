@@ -81,10 +81,10 @@ const ScoreChip = styled.div`
   z-index: 10;
 `;
 
-const DealerArea = ({ dealer, gameState, currentTurn }) => {
+const DealerArea = ({ dealer, gameState, currentTurn, isPickingUpCards = false, players = [] }) => {
   const { cards, score } = dealer;
   const isDealerTurn = currentTurn === 'dealer';
-  const showAllCards = gameState === 'ended' || isDealerTurn;
+  const showAllCards = gameState === 'ended' || isDealerTurn || isPickingUpCards;
   
   // Calculate visible score (only count visible cards)
   const visibleScore = showAllCards ? score : 
@@ -148,8 +148,22 @@ const DealerArea = ({ dealer, gameState, currentTurn }) => {
           // Hide the second card if game is still in progress and not dealer's turn
           const isHidden = index === 1 && !showAllCards;
           // Check if this is the newest card (last card in array)
-          const isNewCard = index === cards.length - 1;
-          return <Card key={`${card.suit}-${card.value}-${index}`} card={card} hidden={isHidden} isNewCard={isNewCard} />;
+          const isNewCard = index === cards.length - 1 && !isPickingUpCards;
+          // Dealer cards are picked up last, after all player cards
+          // Calculate number of active players (excluding split hands)
+          const activePlayerCount = players?.filter(p => !p.id.includes('-split')).length || 0;
+          // Dealer cards animate after all players, with a small stagger between dealer cards
+          const pickupDelay = isPickingUpCards ? (activePlayerCount * 300) + (index * 100) : 0;
+          return (
+            <Card 
+              key={`${card.suit}-${card.value}-${index}`} 
+              card={card} 
+              hidden={isHidden} 
+              isNewCard={isNewCard}
+              isPickedUp={isPickingUpCards}
+              pickupDelay={pickupDelay}
+            />
+          );
         })}
         
         {cards && cards.length > 0 && showAllCards && (

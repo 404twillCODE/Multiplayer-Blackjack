@@ -106,7 +106,13 @@ io.on('connection', (socket) => {
   
   // Create a new room
   socket.on('create_room', ({ username, balance }) => {
-    const roomId = uuidv4().substring(0, 6).toUpperCase();
+    try {
+      if (!username) {
+        socket.emit('error', { message: 'Username is required' });
+        return;
+      }
+      
+      const roomId = uuidv4().substring(0, 6).toUpperCase();
     
     rooms[roomId] = {
       id: roomId,
@@ -130,22 +136,32 @@ io.on('connection', (socket) => {
     };
     
     socket.join(roomId);
-    socket.emit('room_joined', {
-      roomId,
-      players: rooms[roomId].players,
-      gameState: 'waiting'
-    });
-    
-    console.log(`Room created: ${roomId} by ${username}`);
+      socket.emit('room_joined', {
+        roomId,
+        players: rooms[roomId].players,
+        gameState: 'waiting'
+      });
+      
+      console.log(`Room created: ${roomId} by ${username}`);
+    } catch (error) {
+      console.error('❌ Error creating room:', error);
+      socket.emit('error', { message: 'Failed to create room' });
+    }
   });
   
   // Join an existing room
   socket.on('join_room', ({ roomId, username, balance }) => {
-    // Check if room exists
-    if (!rooms[roomId]) {
-      socket.emit('error', { message: 'Room not found' });
-      return;
-    }
+    try {
+      if (!roomId || !username) {
+        socket.emit('error', { message: 'Room ID and username are required' });
+        return;
+      }
+      
+      // Check if room exists
+      if (!rooms[roomId]) {
+        socket.emit('error', { message: 'Room not found' });
+        return;
+      }
     
     // Check if game is in progress
     if (rooms[roomId].gameState !== 'waiting') {
@@ -180,7 +196,11 @@ io.on('connection', (socket) => {
       players: rooms[roomId].players
     });
     
-    console.log(`Player ${username} joined room ${roomId}`);
+      console.log(`Player ${username} joined room ${roomId}`);
+    } catch (error) {
+      console.error('❌ Error joining room:', error);
+      socket.emit('error', { message: 'Failed to join room' });
+    }
   });
   
   // Start the game
@@ -1590,7 +1610,49 @@ app.get('/', (req, res) => {
   res.send('Blackjack Multiplayer Server is running');
 });
 
+// Health check endpoint for Render
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: Date.now() });
+});
+
+// Error handling for uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  console.error('Stack:', error.stack);
+  // Don't exit immediately, let the server try to recover
+});
+
+// Error handling for unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise);
+  console.error('Reason:', reason);
+  // Don't exit immediately, let the server try to recover
+});
+
+// Handle server errors
+server.on('error', (error) => {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+  
+  const bind = typeof PORT === 'string' ? 'Pipe ' + PORT : 'Port ' + PORT;
+  
+  switch (error.code) {
+    case 'EACCES':
+      console.error(`❌ ${bind} requires elevated privileges`);
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(`❌ ${bind} is already in use`);
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+});
+
 // Start server
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`✅ Health check available at http://0.0.0.0:${PORT}/health`);
 }); 
