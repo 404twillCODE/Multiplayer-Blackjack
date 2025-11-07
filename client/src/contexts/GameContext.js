@@ -293,6 +293,7 @@ export const GameProvider = ({ children }) => {
     
     socket.on('card_dealt', (data) => {
       if (!data) return;
+      console.log(`[Client] Received card_dealt event at ${Date.now()}`, data);
       if (data.to === 'dealer') {
         setDealer(data.dealer || { cards: [], score: 0 });
       } else if (data.to && data.cards) {

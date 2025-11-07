@@ -336,7 +336,7 @@ io.on('connection', (socket) => {
         // Restart the timer since player is still in their turn
         startTurnTimer(roomId);
       }
-    }, 200);
+    }, 500);
   });
   
   // Stand (end turn)
@@ -1009,9 +1009,9 @@ function dealInitialCards(roomId) {
   if (!rooms[roomId]) return;
   
   let cardIndex = 0;
-  const dealDelay = 400; // 400ms delay between each card
+  const dealDelay = 1500; // 1500ms (1.5s) delay between each card - very noticeable pause for testing
   
-  // First, mark spectators
+  // First, mark spectators and initialize card arrays
   for (let i = 0; i < rooms[roomId].players.length; i++) {
     const player = rooms[roomId].players[i];
     
@@ -1026,13 +1026,12 @@ function dealInitialCards(roomId) {
         username: player.username
       });
     } else {
-      // Initialize cards array for active players
       player.cards = [];
       rooms[roomId].players[i] = player;
     }
   }
   
-  // Deal first card to each player (round 1)
+  // Deal first round: one card to each player, then dealer
   for (let i = 0; i < rooms[roomId].players.length; i++) {
     const player = rooms[roomId].players[i];
     
@@ -1043,6 +1042,8 @@ function dealInitialCards(roomId) {
       player.cards.push(card);
       player.score = calculateHandValue(player.cards);
       rooms[roomId].players[i] = player;
+      
+      console.log(`[Deal] Dealing card ${player.cards.length} to ${player.username} at ${Date.now()}`);
       
       io.to(roomId).emit('card_dealt', {
         to: player.id,
@@ -1061,6 +1062,8 @@ function dealInitialCards(roomId) {
     rooms[roomId].dealer.cards = [card];
     rooms[roomId].dealer.score = calculateHandValue(rooms[roomId].dealer.cards);
     
+    console.log(`[Deal] Dealing card 1 to dealer at ${Date.now()}`);
+    
     io.to(roomId).emit('card_dealt', {
       to: 'dealer',
       dealer: { ...rooms[roomId].dealer },
@@ -1070,7 +1073,7 @@ function dealInitialCards(roomId) {
   
   cardIndex++;
   
-  // Deal second card to each player (round 2)
+  // Deal second round: one card to each player, then dealer
   for (let i = 0; i < rooms[roomId].players.length; i++) {
     const player = rooms[roomId].players[i];
     
@@ -1088,6 +1091,8 @@ function dealInitialCards(roomId) {
       
       rooms[roomId].players[i] = player;
       
+      console.log(`[Deal] Dealing card ${player.cards.length} to ${player.username} at ${Date.now()}`);
+      
       io.to(roomId).emit('card_dealt', {
         to: player.id,
         cards: [...player.cards],
@@ -1099,15 +1104,22 @@ function dealInitialCards(roomId) {
     cardIndex++;
   }
   
-  // Deal second card to dealer
+  // Deal second card to dealer and start game
   setTimeout(() => {
     const card = rooms[roomId].deck.pop();
     rooms[roomId].dealer.cards.push(card);
     rooms[roomId].dealer.score = calculateHandValue(rooms[roomId].dealer.cards);
     
+    console.log(`[Deal] Dealing card 2 to dealer at ${Date.now()}`);
+    
+    io.to(roomId).emit('card_dealt', {
+      to: 'dealer',
+      dealer: { ...rooms[roomId].dealer },
+      isNewCard: true
+    });
+    
     // After all initial cards are dealt, set up the game
     setTimeout(() => {
-      // Find the first player who is not spectating or has blackjack
       const firstActivePlayerIndex = rooms[roomId].players.findIndex(p => 
         p.status !== 'spectating' && p.status !== 'blackjack'
       );
@@ -1136,12 +1148,6 @@ function dealInitialCards(roomId) {
         }, 1000);
       }
     }, dealDelay);
-    
-    io.to(roomId).emit('card_dealt', {
-      to: 'dealer',
-      dealer: { ...rooms[roomId].dealer },
-      isNewCard: true
-    });
   }, cardIndex * dealDelay);
 }
 
@@ -1371,7 +1377,7 @@ function dealerTurn(roomId) {
         dealer: { ...rooms[roomId].dealer },
         isNewCard: true
       });
-    }, 500);
+    }, 600);
   }
   
   // Set dealer status

@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 
+// Animation: Card flying smoothly from dealer position (top center) to player position
+// Simplified for better performance and less stuttering
+const dealCard = keyframes`
+  from {
+    transform: translateY(-50vh) rotate(180deg) scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+`;
+
 const CardContainer = styled.div`
   position: relative;
   width: 80px;
@@ -14,13 +27,20 @@ const CardContainer = styled.div`
   justify-content: space-between;
   padding: 5px;
   margin: 0 -15px;
-  transition: transform 0.2s ease;
-  transform-origin: bottom center;
+  transform-origin: center center;
   user-select: none;
+  backface-visibility: hidden;
+  perspective: 1000px;
+  animation: ${props => props.$isNewCard ? dealCard : 'none'} 0.4s ease-out forwards;
+  opacity: ${props => props.$isNewCard ? 0 : 1};
+  ${props => props.$isNewCard ? `
+    will-change: transform, opacity;
+  ` : ''}
   
   &:hover {
     transform: translateY(-10px);
     z-index: 10;
+    transition: transform 0.2s ease;
   }
 `;
 
@@ -132,7 +152,7 @@ const Card = ({ card, hidden = false, isNewCard = false }) => {
       // Reset animation after it completes
       const timer = setTimeout(() => {
         setShouldAnimate(false);
-      }, 800);
+      }, 400);
       return () => clearTimeout(timer);
     }
   }, [isNewCard]);
