@@ -1009,7 +1009,7 @@ function dealInitialCards(roomId) {
   if (!rooms[roomId]) return;
   
   let cardIndex = 0;
-  const dealDelay = 1500; // 1500ms (1.5s) delay between each card - very noticeable pause for testing
+  const dealDelay = 650; // 650ms delay between each card for realistic dealing pace
   
   // First, mark spectators and initialize card arrays
   for (let i = 0; i < rooms[roomId].players.length; i++) {
