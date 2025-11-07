@@ -21,7 +21,7 @@ export const GameProvider = ({ children }) => {
 
   // Connect to socket server when component mounts
   useEffect(() => {
-    const newSocket = io('http://localhost:5000');
+    const newSocket = io('https://multiplayer-blackjack-7df9.onrender.com');
     setSocket(newSocket);
 
     return () => {
