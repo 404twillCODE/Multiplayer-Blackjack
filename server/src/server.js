@@ -1378,39 +1378,69 @@ function dealerTurn(roomId) {
   // Clear any turn timers since dealer's turn is starting
   clearTurnTimer(roomId);
   
-  // Reveal dealer's cards
+  // Reveal dealer's cards (first emit to show hidden card)
   io.to(roomId).emit('card_dealt', {
     to: 'dealer',
-    dealer: rooms[roomId].dealer
+    dealer: { ...rooms[roomId].dealer },
+    isNewCard: false // Not a new card, just revealing
   });
   
   // Dealer draws cards until score is 17 or higher
-  while (rooms[roomId].dealer.score < 17) {
+  // Use a recursive function to handle sequential card dealing with delays
+  const dealDealerCard = (delay = 600) => {
+    // Check if room still exists and game hasn't ended
+    if (!rooms[roomId] || rooms[roomId].gameState === 'ended') {
+      return; // Stop if room doesn't exist or game has ended
+    }
+    
+    // Check if dealer needs more cards
+    if (rooms[roomId].dealer.score >= 17) {
+      // Dealer is done, set status and settle
+      if (rooms[roomId].dealer.score > 21) {
+        rooms[roomId].dealer.status = 'busted';
+      } else if (isBlackjack(rooms[roomId].dealer.cards)) {
+        rooms[roomId].dealer.status = 'blackjack';
+      } else {
+        rooms[roomId].dealer.status = 'stood';
+      }
+      
+      // Determine winners and settle bets
+      settleGame(roomId);
+      return;
+    }
+    
+    // Deal one card
     const card = rooms[roomId].deck.pop();
     rooms[roomId].dealer.cards.push(card);
     rooms[roomId].dealer.score = calculateHandValue(rooms[roomId].dealer.cards);
     
     // Emit card dealt event with delay for animation
     setTimeout(() => {
+      // Check again before emitting (game might have ended)
+      if (!rooms[roomId] || rooms[roomId].gameState === 'ended') {
+        return; // Stop if room doesn't exist or game has ended
+      }
+      
       io.to(roomId).emit('card_dealt', {
         to: 'dealer',
         dealer: { ...rooms[roomId].dealer },
         isNewCard: true
       });
-    }, 600);
-  }
+      
+      // After animation delay, deal next card if needed
+      setTimeout(() => {
+        // Final check before recursive call
+        if (!rooms[roomId] || rooms[roomId].gameState === 'ended') {
+          return; // Stop if room doesn't exist or game has ended
+        }
+        
+        dealDealerCard(600);
+      }, 600);
+    }, delay);
+  };
   
-  // Set dealer status
-  if (rooms[roomId].dealer.score > 21) {
-    rooms[roomId].dealer.status = 'busted';
-  } else if (isBlackjack(rooms[roomId].dealer.cards)) {
-    rooms[roomId].dealer.status = 'blackjack';
-  } else {
-    rooms[roomId].dealer.status = 'stood';
-  }
-  
-  // Determine winners and settle bets
-  settleGame(roomId);
+  // Start dealing dealer cards
+  dealDealerCard(600);
 }
 
 // Determine winners and settle bets
