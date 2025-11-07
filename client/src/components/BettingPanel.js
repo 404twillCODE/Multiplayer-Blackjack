@@ -262,9 +262,21 @@ const BettingPanel = ({ onBetComplete, playerBalance }) => {
     return playerBalance < value || playerBalance < currentBet + value;
   };
   
-  // Don't render the panel if bet has been placed
+  // If bet has been placed, show waiting message instead of hiding
   if (betPlaced) {
-    return null;
+    return (
+      <BettingContainer>
+        <Title style={{ color: '#4caf50' }}>✓ Bet Placed!</Title>
+        <div style={{ 
+          textAlign: 'center', 
+          padding: '20px',
+          color: '#e2b714',
+          fontSize: '1.1rem'
+        }}>
+          Waiting for other players to place their bets...
+        </div>
+      </BettingContainer>
+    );
   }
   
   return (

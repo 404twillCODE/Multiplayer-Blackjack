@@ -84,6 +84,7 @@ const DealerArea = ({ dealer, gameState, currentTurn }) => {
   };
   
   // Calculate score for visible cards only
+  // In blackjack, aces can be worth 11 or 1, and we always choose the best value
   function calculateVisibleScore(cards) {
     if (!cards || cards.length === 0) return 0;
     
@@ -93,10 +94,11 @@ const DealerArea = ({ dealer, gameState, currentTurn }) => {
     let score = 0;
     let aces = 0;
     
-    // Count score and aces
+    // First pass: Count all non-ace cards and count aces
     for (const card of visibleCards) {
       if (card.value === 'ace') {
         aces++;
+        // Start with ace as 11 (best case scenario)
         score += 11;
       } else if (['king', 'queen', 'jack'].includes(card.value)) {
         score += 10;
@@ -105,9 +107,10 @@ const DealerArea = ({ dealer, gameState, currentTurn }) => {
       }
     }
     
-    // Convert aces from 11 to 1 as needed to avoid busting
+    // Second pass: If we bust, convert aces from 11 to 1 (subtract 10 per ace)
+    // This ensures we always get the best possible score without busting
     while (score > 21 && aces > 0) {
-      score -= 10;
+      score -= 10; // Convert one ace from 11 to 1
       aces--;
     }
     

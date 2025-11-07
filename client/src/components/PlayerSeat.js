@@ -151,11 +151,38 @@ const getStatusLabel = (status) => {
   }
 };
 
+const KickButton = styled.button`
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background-color: #d32f2f;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 30;
+  opacity: 0;
+  
+  &:hover {
+    background-color: #b71c1c;
+    transform: scale(1.1);
+  }
+`;
+
 const PlayerSeat = ({ 
   player, 
   isCurrentPlayer, 
   isPlayerTurn,
-  gameState
+  gameState,
+  isHost,
+  onKick
 }) => {
   if (!player) return <SeatContainer />;
   
@@ -167,8 +194,43 @@ const PlayerSeat = ({
   // Don't show "Your Turn" indicator if player has blackjack
   const showTurnIndicator = isPlayerTurn && status !== 'blackjack';
   
+  // Show kick button only if:
+  // - User is host
+  // - Not kicking themselves
+  // - Game is in waiting state
+  // - Not a split hand
+  const showKickButton = isHost && 
+                         !isCurrentPlayer && 
+                         gameState === 'waiting' && 
+                         !player.id.includes('-split') &&
+                         onKick;
+  
+  const handleKick = (e) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to kick ${username}?`)) {
+      onKick(player.id);
+    }
+  };
+  
   return (
-    <SeatContainer>
+    <SeatContainer 
+      onMouseEnter={(e) => {
+        if (showKickButton) {
+          e.currentTarget.querySelector('button')?.style.setProperty('opacity', '1');
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (showKickButton) {
+          e.currentTarget.querySelector('button')?.style.setProperty('opacity', '0');
+        }
+      }}
+    >
+      {showKickButton && (
+        <KickButton onClick={handleKick} title={`Kick ${username}`}>
+          ✕
+        </KickButton>
+      )}
+      
       {showTurnIndicator && <YourTurnIndicator>Your Turn</YourTurnIndicator>}
       
       <UsernameDisplay $isCurrentPlayer={isCurrentPlayer || isSplitHandOfCurrentPlayer}>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
 import { SOCKET_SERVER } from '../config';
@@ -32,7 +32,7 @@ export const GameProvider = ({ children }) => {
   };
 
   // Define startNewRound function before it's used in useEffect
-  const startNewRound = () => {
+  const startNewRound = useCallback(() => {
     if (!connected) {
       console.error("Cannot start new round: Not connected to server");
       return;
@@ -50,7 +50,7 @@ export const GameProvider = ({ children }) => {
     
     console.log(`Emitting new_round event for room ${roomId}`);
     socket.emit('new_round', { roomId });
-  };
+  }, [connected, roomId, socket]);
 
   // Connect to socket server
   useEffect(() => {
@@ -68,8 +68,16 @@ export const GameProvider = ({ children }) => {
     });
     
     newSocket.on('error', (data) => {
+      console.error('Socket error event:', data);
       setError(data.message);
       setTimeout(() => setError(null), 5000);
+    });
+    
+    // Listen for all socket events for debugging
+    newSocket.onAny((eventName, ...args) => {
+      if (eventName === 'kick_player' || eventName === 'error' || eventName.includes('kick')) {
+        console.log('Socket event received:', eventName, args);
+      }
     });
     
     return () => {
@@ -129,10 +137,50 @@ export const GameProvider = ({ children }) => {
       }
     });
     
+    socket.on('player_kicked', (data) => {
+      if (!data) return;
+      setPlayers(data.players || []);
+      
+      // Add system message about player being kicked
+      if (data.kickedPlayer) {
+        addMessage({
+          content: `${data.kickedPlayer} was kicked from the room`,
+          type: 'system',
+          timestamp: Date.now()
+        });
+      }
+    });
+    
     return () => {
       socket.off('room_joined');
       socket.off('player_joined');
       socket.off('player_left');
+      socket.off('player_kicked');
+    };
+  }, [socket, navigate]);
+  
+  // Handle being kicked from room
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleKicked = (data) => {
+      // Current player was kicked
+      setError(data.message || 'You have been kicked from the room');
+      // Clear room state
+      setRoomId(null);
+      setPlayers([]);
+      setDealer({ cards: [], score: 0 });
+      setGameState('waiting');
+      setCurrentTurn(null);
+      setMessages([]);
+      // Navigate to home
+      navigate('/');
+    };
+    
+    socket.on('kicked', handleKicked);
+    
+    return () => {
+      socket.off('kicked', handleKicked);
     };
   }, [socket, navigate]);
   
@@ -165,13 +213,62 @@ export const GameProvider = ({ children }) => {
       });
     });
     
+    socket.on('player_bet_placed', (data) => {
+      if (!data) return;
+      console.log('💰 [player_bet_placed] Received bet update:', {
+        playerId: data.playerId,
+        username: data.username,
+        bet: data.bet,
+        playersCount: data.players?.length,
+        allPlayers: data.players?.map(p => ({ username: p.username, bet: p.bet, balance: p.balance }))
+      });
+      
+      // Update players array with the new bet information
+      if (data.players && Array.isArray(data.players)) {
+        console.log('💰 [player_bet_placed] Setting players array to:', data.players.map(p => ({
+          username: p.username,
+          bet: p.bet,
+          balance: p.balance
+        })));
+        setPlayers([...data.players]); // Create new array to ensure React detects change
+      }
+      
+      // Update balance if it's the current player
+      if (data.playerId === socket.id && data.balance !== undefined) {
+        setBalance(data.balance);
+      }
+    });
+    
+    socket.on('bet_placed', (data) => {
+      if (!data) return;
+      // Update balance when current player places bet
+      if (data.balance !== undefined) {
+        setBalance(data.balance);
+      }
+    });
+    
     socket.on('player_turn', (data) => {
       setCurrentTurn(data.playerId);
+      setPlayers(data.players || players);
       
       const player = data.players && data.players.find(p => p.id === data.playerId);
       
       addMessage({
         content: `It's ${player ? player.username : 'unknown player'}'s turn`,
+        type: 'system',
+        timestamp: Date.now()
+      });
+    });
+    
+    socket.on('player_auto_skipped', (data) => {
+      if (!data) return;
+      setPlayers(data.players || players);
+      setCurrentTurn(null);
+      
+      const player = data.players && data.players.find(p => p.id === data.playerId);
+      
+      addMessage({
+        content: `${player ? player.username : 'A player'} was automatically skipped (30 seconds elapsed)`,
         type: 'system',
         timestamp: Date.now()
       });
@@ -204,6 +301,43 @@ export const GameProvider = ({ children }) => {
         type: 'system',
         timestamp: Date.now()
       });
+    });
+    
+    socket.on('game_reset', (data) => {
+      console.log('🎮🎮🎮 GAME_RESET EVENT RECEIVED 🎮🎮🎮');
+      console.log('Game reset data:', data);
+      
+      if (!data) {
+        console.error('❌ No data in game_reset event');
+        return;
+      }
+      
+      console.log('Setting game state to waiting...');
+      setGameState('waiting');
+      setDealer({ cards: [], score: 0 });
+      setCurrentTurn(null);
+      
+      console.log('Updating players:', data.players);
+      setPlayers(data.players || []);
+      
+      // Update balance for current player
+      const currentPlayer = data.players?.find(p => p.id === socket.id);
+      console.log('Current player in reset data:', currentPlayer);
+      if (currentPlayer) {
+        console.log(`Updating balance: ${currentPlayer.balance}`);
+        setBalance(currentPlayer.balance);
+      } else {
+        console.warn('⚠️ Current player not found in reset data');
+      }
+      
+      // Add system message
+      addMessage({
+        content: data.message || 'Game has been reset! Everyone starts with $1000 again.',
+        type: 'system',
+        timestamp: Date.now()
+      });
+      
+      console.log('✅ Game reset complete!');
     });
     
     socket.on('game_ended', (data) => {
@@ -256,8 +390,16 @@ export const GameProvider = ({ children }) => {
     
     socket.on('new_round', (data) => {
       if (!data) return;
+      console.log('🔄 [new_round] Received new round event:', {
+        playersCount: data.players?.length,
+        players: data.players?.map(p => ({ username: p.username, bet: p.bet, balance: p.balance }))
+      });
+      
       setGameState('betting');
-      setPlayers(data.players || []);
+      // Update players array - bets should be 0 at start of new round
+      if (data.players && Array.isArray(data.players)) {
+        setPlayers(data.players);
+      }
       setDealer(data.dealer || { cards: [], score: 0 });
       
       // Add system message
@@ -314,11 +456,14 @@ export const GameProvider = ({ children }) => {
     return () => {
       socket.off('game_started');
       socket.off('betting_ended');
+      socket.off('player_bet_placed');
+      socket.off('bet_placed');
       socket.off('card_dealt');
       socket.off('player_turn');
       socket.off('turn_ended');
       socket.off('dealer_turn');
       socket.off('game_ended');
+      socket.off('game_reset');
       socket.off('new_round');
       socket.off('message');
       socket.off('leaderboard_updated');
@@ -352,6 +497,21 @@ export const GameProvider = ({ children }) => {
   
   const placeBet = (amount) => {
     if (!connected || !roomId) return;
+    
+    console.log('💰 [placeBet] Placing bet:', { amount, roomId, socketId: socket.id });
+    
+    // Optimistically update the local player's bet immediately
+    setPlayers(prevPlayers => {
+      const updated = prevPlayers.map(p => {
+        if (p.id === socket.id) {
+          console.log('💰 [placeBet] Updating local player bet:', { username: p.username, oldBet: p.bet, newBet: amount });
+          return { ...p, bet: amount, balance: p.balance - amount };
+        }
+        return p;
+      });
+      console.log('💰 [placeBet] Updated players array:', updated.map(p => ({ username: p.username, bet: p.bet })));
+      return updated;
+    });
     
     socket.emit('place_bet', { roomId, amount });
     setLastBet(amount);
@@ -440,6 +600,110 @@ export const GameProvider = ({ children }) => {
     setMessages([]);
   };
   
+  const kickPlayer = (playerId) => {
+    if (!connected || !roomId) {
+      console.error('Cannot kick player: not connected or no roomId', { connected, roomId });
+      return;
+    }
+    
+    if (!socket) {
+      console.error('Cannot kick player: socket not available');
+      return;
+    }
+    
+    console.log('=== KICK ATTEMPT ===');
+    console.log('RoomId:', roomId);
+    console.log('PlayerId to kick:', playerId);
+    console.log('Socket ID:', socket.id);
+    console.log('Socket connected?', socket.connected);
+    console.log('Socket active?', socket.active);
+    
+    // Verify socket is connected before emitting
+    if (!socket.connected) {
+      console.error('❌ Socket is not connected!');
+      return;
+    }
+    
+    // Test if socket can emit at all
+    console.log('Testing socket connection...');
+    socket.emit('ping', { test: 'connection' });
+    
+    // Emit the kick event
+    console.log('Emitting kick_player event...');
+    const eventData = { roomId, playerId };
+    console.log('Event data:', eventData);
+    
+    socket.emit('kick_player', eventData);
+    
+    console.log('Event emitted, waiting for response...');
+    
+    // Listen for error response
+    const errorTimeout = setTimeout(() => {
+      console.warn('⚠️ No response from server after 2 seconds');
+    }, 2000);
+    
+    socket.once('error', (error) => {
+      clearTimeout(errorTimeout);
+      console.error('❌ Socket error during kick:', error);
+    });
+    
+    socket.once('player_kicked', (data) => {
+      clearTimeout(errorTimeout);
+      console.log('✅ Kick successful:', data);
+    });
+  };
+
+  // Restart game - reset all players' balances to 1000
+  const restartGame = () => {
+    console.log('=== RESTART GAME CALLED ===');
+    console.log('Connected:', connected);
+    console.log('RoomId:', roomId);
+    console.log('Socket:', socket?.id);
+    console.log('Socket connected?', socket?.connected);
+    
+    if (!connected || !roomId) {
+      console.error('Cannot restart game: not connected or no roomId', { connected, roomId });
+      alert('Error: Not connected or no room ID. Please refresh the page.');
+      return;
+    }
+    
+    if (!socket) {
+      console.error('Cannot restart game: socket not available');
+      alert('Error: Socket not available. Please refresh the page.');
+      return;
+    }
+    
+    if (!socket.connected) {
+      console.error('Socket is not connected!');
+      alert('Error: Not connected to server. Please refresh the page.');
+      return;
+    }
+    
+    console.log('✅ Emitting restart_game event for room:', roomId);
+    console.log('Event payload:', { roomId });
+    
+    // Emit the restart event
+    socket.emit('restart_game', { roomId }, (response) => {
+      // Callback for acknowledgment (if server supports it)
+      console.log('Server response:', response);
+    });
+    
+    // Listen for error response
+    socket.once('error', (error) => {
+      console.error('❌ Error restarting game:', error);
+      if (error && error.message) {
+        alert(`Error: ${error.message}`);
+      } else if (error) {
+        alert(`Error: ${JSON.stringify(error)}`);
+      }
+    });
+    
+    // Also listen for any response after a short delay
+    setTimeout(() => {
+      console.log('Checking if game_reset was received...');
+    }, 1000);
+  };
+  
   // Check if it's current player's turn
   const isPlayerTurn = () => {
     if (!socket || !currentTurn) return false;
@@ -510,10 +774,13 @@ export const GameProvider = ({ children }) => {
         startNewRound,
         sendMessage,
         leaveRoom,
+        kickPlayer,
+        restartGame,
         isPlayerTurn,
         getCurrentPlayer,
         toggleHints,
-        setAutoSkipNewRound
+        setAutoSkipNewRound,
+        socket
       }}
     >
       {children}

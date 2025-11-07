@@ -20,6 +20,7 @@ const PORT = process.env.PORT || 5000;
 // Game state
 const rooms = {};
 const leaderboard = [];
+const turnTimers = {}; // Store timers for auto-skipping players after 30 seconds
 
 // Card deck utilities
 const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
@@ -46,14 +47,19 @@ const shuffleDeck = (deck) => {
 };
 
 // Calculate the best score for a hand (handling aces)
+// In blackjack, aces can be worth 11 or 1, and we always choose the best value
+// This function returns the highest possible score without busting (over 21)
 const calculateHandValue = (cards) => {
+  if (!cards || cards.length === 0) return 0;
+  
   let score = 0;
   let aces = 0;
   
-  // Count score and aces
+  // First pass: Count all non-ace cards and count aces
   for (const card of cards) {
     if (card.value === 'ace') {
       aces++;
+      // Start with ace as 11 (best case scenario)
       score += 11;
     } else if (['king', 'queen', 'jack'].includes(card.value)) {
       score += 10;
@@ -62,9 +68,11 @@ const calculateHandValue = (cards) => {
     }
   }
   
-  // Convert aces from 11 to 1 as needed to avoid busting
+  // Second pass: If we bust, convert aces from 11 to 1 (subtract 10 per ace)
+  // This ensures we always get the best possible score without busting
+  // Example: A, A, 9 = 11+11+9 = 31, then convert: 21+9 = 30, then 11+9 = 20 ✓
   while (score > 21 && aces > 0) {
-    score -= 10;
+    score -= 10; // Convert one ace from 11 to 1
     aces--;
   }
   
@@ -79,6 +87,21 @@ const isBlackjack = (cards) => {
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
+  
+  // Test event to verify connection
+  socket.on('ping', (data) => {
+    console.log(`Ping received from ${socket.id}:`, data);
+    socket.emit('pong', { message: 'Server is alive', timestamp: Date.now() });
+  });
+  
+  // Log all events for debugging
+  const originalEmit = socket.emit.bind(socket);
+  socket.emit = function(event, ...args) {
+    if (event === 'restart_game' || event === 'game_reset') {
+      console.log(`[DEBUG] Emitting ${event} to ${socket.id}:`, args);
+    }
+    return originalEmit(event, ...args);
+  };
   
   // Create a new room
   socket.on('create_room', ({ username, balance }) => {
@@ -211,11 +234,28 @@ io.on('connection', (socket) => {
     player.balance -= amount;
     rooms[roomId].players[playerIndex] = player;
     
+    console.log(`💰 [place_bet] Player ${player.username} placed bet of $${amount} in room ${roomId}`);
+    console.log(`💰 [place_bet] Updated players:`, rooms[roomId].players.map(p => ({
+      username: p.username,
+      bet: p.bet,
+      balance: p.balance
+    })));
+    
     // Emit to the player that their bet was placed successfully
     socket.emit('bet_placed', {
       bet: amount,
       balance: player.balance
     });
+    
+    // Emit to all players in the room that a bet was placed (for real-time betting status updates)
+    io.to(roomId).emit('player_bet_placed', {
+      playerId: socket.id,
+      username: player.username,
+      bet: amount,
+      players: rooms[roomId].players
+    });
+    
+    console.log(`💰 [place_bet] Emitted player_bet_placed to room ${roomId}`);
     
     // Check if all players have placed bets or have zero balance
     const allPlayersReady = rooms[roomId].players.every(p => 
@@ -254,6 +294,9 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Not your turn' });
       return;
     }
+    
+    // Clear the turn timer since player is taking action
+    clearTurnTimer(roomId);
     
     // Find the player or split hand
     const playerIndex = rooms[roomId].players.findIndex(p => p.id === targetHandId);
@@ -294,6 +337,9 @@ io.on('connection', (socket) => {
         cards: player.cards,
         score: player.score
       });
+      
+      // Restart the timer since player is still in their turn
+      startTurnTimer(roomId);
     }
   });
   
@@ -309,6 +355,9 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Not your turn' });
       return;
     }
+    
+    // Clear the turn timer since player is taking action
+    clearTurnTimer(roomId);
     
     // Find the player or split hand
     const playerIndex = rooms[roomId].players.findIndex(p => p.id === targetHandId);
@@ -336,6 +385,9 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Not your turn' });
       return;
     }
+    
+    // Clear the turn timer since player is taking action
+    clearTurnTimer(roomId);
     
     // Find the player or split hand
     const playerIndex = rooms[roomId].players.findIndex(p => p.id === targetHandId);
@@ -413,6 +465,9 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Not your turn' });
       return;
     }
+    
+    // Clear the turn timer since player is taking action
+    clearTurnTimer(roomId);
     
     // Find the player
     const playerIndex = rooms[roomId].players.findIndex(p => p.id === socket.id);
@@ -547,13 +602,74 @@ io.on('connection', (socket) => {
   
   // Start a new round
   socket.on('new_round', ({ roomId }) => {
-    console.log(`Received new_round event for room ${roomId} from socket ${socket.id}`);
+    console.log(`\n📥 Received new_round event for room ${roomId} from socket ${socket.id}`);
+    console.log(`   Current game state: ${rooms[roomId]?.gameState || 'ROOM NOT FOUND'}`);
     
     if (!rooms[roomId]) {
-      console.log(`Room ${roomId} not found for new_round event`);
+      console.log(`❌ Room ${roomId} not found for new_round event`);
       return;
     }
     
+    // FIRST: Check if all players are spectating BEFORE checking game state
+    // This allows reset even if gameState is 'waiting' (from a previous reset attempt)
+    const activePlayers = rooms[roomId].players.filter(p => !p.originalPlayer);
+    
+    console.log(`\n🔍 [new_round] Checking reset condition at START for room ${roomId}:`);
+    console.log(`   Active players (excluding splits): ${activePlayers.length}`);
+    activePlayers.forEach(p => {
+      const isSpectating = p.status === 'spectating' || p.balance <= 0;
+      console.log(`     - ${p.username}: balance=${p.balance}, status=${p.status}, isSpectating=${isSpectating}`);
+    });
+    
+    const allPlayersSpectating = activePlayers.length > 0 && activePlayers.every(p => {
+      return p.status === 'spectating' || p.balance <= 0;
+    });
+    
+    console.log(`   ✅ All players spectating: ${allPlayersSpectating}`);
+    
+    if (allPlayersSpectating && activePlayers.length > 0) {
+      console.log(`\n🎮🎮🎮 [new_round] RESETTING GAME - All players in room ${roomId} are spectating! 🎮🎮🎮`);
+      
+      const startingBalance = 1000;
+      
+      // Reset all players' balances and status
+      for (const player of rooms[roomId].players) {
+        if (player.originalPlayer) continue;
+        
+        player.balance = startingBalance;
+        player.status = null;
+        player.cards = [];
+        player.bet = 0;
+        player.score = 0;
+      }
+      
+      // Reset dealer
+      rooms[roomId].dealer = {
+        cards: [],
+        score: 0,
+        status: null
+      };
+      
+      // Reset game state to waiting
+      rooms[roomId].gameState = 'waiting';
+      rooms[roomId].currentTurn = null;
+      rooms[roomId].deck = [];
+      
+      // Clear any turn timers
+      clearTurnTimer(roomId);
+      
+      // Notify all players that the game has been reset
+      io.to(roomId).emit('game_reset', {
+        message: 'All players ran out of money! Game has been reset. Everyone starts with $1000 again.',
+        players: rooms[roomId].players,
+        gameState: 'waiting'
+      });
+      
+      console.log(`Game reset in room ${roomId}. All players now have $${startingBalance}`);
+      return; // Don't continue with new round, since we reset instead
+    }
+    
+    // Only check game state if we're not resetting
     if (rooms[roomId].gameState !== 'ended') {
       console.log(`Cannot start new round in room ${roomId} - game state is ${rooms[roomId].gameState}`);
       return;
@@ -591,6 +707,7 @@ io.on('connection', (socket) => {
       // Mark players with zero balance as spectators
       if (rooms[roomId].players[i].balance <= 0) {
         rooms[roomId].players[i].status = 'spectating';
+        rooms[roomId].players[i].balance = 0; // Ensure balance is exactly 0
         rooms[roomId].players[i].cards = [];
         rooms[roomId].players[i].bet = 0;
         rooms[roomId].players[i].score = 0;
@@ -609,6 +726,64 @@ io.on('connection', (socket) => {
         rooms[roomId].players[i].status = null; // Reset status
         rooms[roomId].players[i].score = 0;
       }
+    }
+    
+    // Check again if all players are spectating (after marking them)
+    const activePlayersAfterMarking = rooms[roomId].players.filter(p => !p.originalPlayer);
+    const allPlayersSpectatingAfter = activePlayersAfterMarking.length > 0 && activePlayersAfterMarking.every(p => {
+      return p.status === 'spectating' || p.balance <= 0;
+    });
+    
+    console.log(`\n🔍 [new_round] Checking reset condition AFTER marking players for room ${roomId}:`);
+    console.log(`  Active players (excluding splits): ${activePlayersAfterMarking.length}`);
+    activePlayersAfterMarking.forEach(p => {
+      const isSpectating = p.status === 'spectating' || p.balance <= 0;
+      console.log(`    - ${p.username}: balance=${p.balance}, status=${p.status}, isSpectating=${isSpectating}`);
+    });
+    console.log(`  ✅ All players spectating: ${allPlayersSpectatingAfter}`);
+    
+    // If everyone is spectating, reset the game (give everyone starting balance back)
+    if (allPlayersSpectatingAfter && activePlayersAfterMarking.length > 0) {
+      console.log(`\n🎮 [new_round] RESETTING GAME - All players in room ${roomId} are spectating!`);
+      
+      const startingBalance = 1000;
+      
+      // Reset all players' balances and status
+      for (const player of rooms[roomId].players) {
+        // Skip split hands
+        if (player.originalPlayer) continue;
+        
+        player.balance = startingBalance;
+        player.status = null;
+        player.cards = [];
+        player.bet = 0;
+        player.score = 0;
+      }
+      
+      // Reset dealer
+      rooms[roomId].dealer = {
+        cards: [],
+        score: 0,
+        status: null
+      };
+      
+      // Reset game state to waiting
+      rooms[roomId].gameState = 'waiting';
+      rooms[roomId].currentTurn = null;
+      rooms[roomId].deck = [];
+      
+      // Clear any turn timers
+      clearTurnTimer(roomId);
+      
+      // Notify all players that the game has been reset
+      io.to(roomId).emit('game_reset', {
+        message: 'All players ran out of money! Game has been reset. Everyone starts with $1000 again.',
+        players: rooms[roomId].players,
+        gameState: 'waiting'
+      });
+      
+      console.log(`Game reset in room ${roomId}. All players now have $${startingBalance}`);
+      return; // Don't continue with new round, since we reset instead
     }
     
     // Update game state
@@ -643,6 +818,157 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('message', messageObj);
   });
   
+  // Restart game - reset all players' balances to 1000
+  socket.on('restart_game', (data) => {
+    console.log(`\n=== RESTART GAME REQUEST ===`);
+    console.log(`Raw data received:`, data);
+    console.log(`RoomId: ${data?.roomId}`);
+    console.log(`SocketId (requester): ${socket.id}`);
+    console.log(`Available rooms:`, Object.keys(rooms));
+    
+    const { roomId } = data || {};
+    
+    if (!roomId) {
+      console.error(`❌ No roomId provided in restart_game event`);
+      socket.emit('error', { message: 'Room ID is required' });
+      return;
+    }
+    
+    if (!rooms[roomId]) {
+      console.log(`❌ Room ${roomId} not found`);
+      socket.emit('error', { message: 'Room not found' });
+      return;
+    }
+    
+    console.log(`Room ${roomId} exists. Players in room:`, rooms[roomId].players.map(p => ({ id: p.id, username: p.username })));
+    
+    // Check if player is the host (first player)
+    const hostId = rooms[roomId].players[0]?.id;
+    console.log(`Host check: hostId=${hostId}, socketId=${socket.id}, match=${hostId === socket.id}`);
+    
+    if (!hostId) {
+      console.log(`❌ No host found in room ${roomId}`);
+      socket.emit('error', { message: 'No host found in room' });
+      return;
+    }
+    
+    if (hostId !== socket.id) {
+      console.log(`❌ Only host can restart game. Host: ${hostId}, Requester: ${socket.id}`);
+      socket.emit('error', { message: 'Only the host can restart the game' });
+      return;
+    }
+    
+    console.log(`✅ Host ${rooms[roomId].players[0].username} is restarting the game`);
+    
+    const startingBalance = 1000;
+    
+    // Reset all players' balances and status
+    for (const player of rooms[roomId].players) {
+      // Skip split hands
+      if (player.originalPlayer) continue;
+      
+      console.log(`Resetting player ${player.username}: balance ${player.balance} -> ${startingBalance}`);
+      player.balance = startingBalance;
+      player.status = null;
+      player.cards = [];
+      player.bet = 0;
+      player.score = 0;
+    }
+    
+    // Reset dealer
+    rooms[roomId].dealer = {
+      cards: [],
+      score: 0,
+      status: null
+    };
+    
+    // Reset game state to waiting
+    rooms[roomId].gameState = 'waiting';
+    rooms[roomId].currentTurn = null;
+    rooms[roomId].deck = [];
+    
+    // Clear any turn timers
+    clearTurnTimer(roomId);
+    
+    console.log(`Emitting game_reset event to room ${roomId}...`);
+    
+    // Notify all players that the game has been reset
+    io.to(roomId).emit('game_reset', {
+      message: 'Game has been restarted by the host! Everyone starts with $1000 again.',
+      players: rooms[roomId].players,
+      gameState: 'waiting'
+    });
+    
+    console.log(`✅ Game restarted in room ${roomId}. All players now have $${startingBalance}`);
+  });
+  
+  // Kick a player from the room
+  socket.on('kick_player', ({ roomId, playerId }) => {
+    console.log(`\n=== KICK REQUEST ===`);
+    console.log(`RoomId: ${roomId}`);
+    console.log(`PlayerId to kick: ${playerId}`);
+    console.log(`SocketId (requester): ${socket.id}`);
+    console.log(`Available rooms:`, Object.keys(rooms));
+    console.log(`Room ${roomId} exists:`, !!rooms[roomId]);
+    
+    if (!rooms[roomId]) {
+      console.log(`❌ Room ${roomId} not found`);
+      console.log(`Available rooms:`, Object.keys(rooms));
+      socket.emit('error', { message: 'Room not found' });
+      return;
+    }
+    
+    // Check if player is the host (first player)
+    const hostId = rooms[roomId].players[0]?.id;
+    console.log(`Host check: hostId=${hostId}, socketId=${socket.id}, match=${hostId === socket.id}`);
+    
+    if (hostId !== socket.id) {
+      console.log(`Kick denied: Only host can kick. Host: ${hostId}, Requester: ${socket.id}`);
+      socket.emit('error', { message: 'Only the host can kick players' });
+      return;
+    }
+    
+    // Can't kick during active gameplay (playing state)
+    if (rooms[roomId].gameState === 'playing') {
+      socket.emit('error', { message: 'Cannot kick players during active gameplay' });
+      return;
+    }
+    
+    // Can't kick yourself
+    if (playerId === socket.id) {
+      socket.emit('error', { message: 'Cannot kick yourself' });
+      return;
+    }
+    
+    // Find the player to kick
+    const playerIndex = rooms[roomId].players.findIndex(p => p.id === playerId);
+    if (playerIndex === -1) {
+      socket.emit('error', { message: 'Player not found' });
+      return;
+    }
+    
+    const kickedPlayer = rooms[roomId].players[playerIndex];
+    
+    // Remove player from room
+    rooms[roomId].players.splice(playerIndex, 1);
+    
+    // Notify the kicked player
+    io.to(playerId).emit('kicked', {
+      message: 'You have been kicked from the room by the host'
+    });
+    
+    // Remove kicked player from socket room
+    io.sockets.sockets.get(playerId)?.leave(roomId);
+    
+    // Notify remaining players
+    io.to(roomId).emit('player_kicked', {
+      players: rooms[roomId].players,
+      kickedPlayer: kickedPlayer.username
+    });
+    
+    console.log(`Player ${kickedPlayer.username} (${playerId}) was kicked from room ${roomId} by host ${rooms[roomId].players[0].username}`);
+  });
+  
   // Handle disconnection
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
@@ -658,6 +984,8 @@ io.on('connection', (socket) => {
         
         // If room is empty, delete it
         if (rooms[roomId].players.length === 0) {
+          // Clear any turn timers before deleting room
+          clearTurnTimer(roomId);
           delete rooms[roomId];
           console.log(`Room ${roomId} deleted`);
           continue;
@@ -752,6 +1080,12 @@ function dealInitialCards(roomId) {
         playerId: rooms[roomId].currentTurn,
         players: rooms[roomId].players
       });
+      
+      // Start the 30-second auto-skip timer for the first player
+      // Add a small delay to ensure the turn is fully set
+      setTimeout(() => {
+        startTurnTimer(roomId);
+      }, 100);
     }
   } else if (rooms[roomId].players.some(p => p.status !== 'spectating')) {
     // If all players have blackjack or are spectating but at least one player is not spectating,
@@ -766,8 +1100,82 @@ function dealInitialCards(roomId) {
   }
 }
 
+// Clear the turn timer for a room
+function clearTurnTimer(roomId) {
+  if (turnTimers[roomId]) {
+    console.log(`[Timer] Clearing timer for room ${roomId}`);
+    clearTimeout(turnTimers[roomId]);
+    delete turnTimers[roomId];
+  }
+}
+
+// Start a timer to auto-skip a player after 30 seconds
+function startTurnTimer(roomId) {
+  // Clear any existing timer first
+  clearTurnTimer(roomId);
+  
+  if (!rooms[roomId] || rooms[roomId].gameState !== 'playing') {
+    console.log(`[Timer] Not starting timer for room ${roomId}: gameState=${rooms[roomId]?.gameState}`);
+    return;
+  }
+  
+  const currentTurn = rooms[roomId].currentTurn;
+  if (!currentTurn || currentTurn === 'dealer') {
+    console.log(`[Timer] Not starting timer for room ${roomId}: currentTurn=${currentTurn}`);
+    return;
+  }
+  
+  const player = rooms[roomId].players.find(p => p.id === currentTurn);
+  const playerName = player?.username || currentTurn;
+  console.log(`[Timer] Starting 30-second timer for player ${playerName} (${currentTurn}) in room ${roomId}`);
+  
+  // Set a 30-second timer to automatically stand the player
+  turnTimers[roomId] = setTimeout(() => {
+    console.log(`[Timer] 30 seconds elapsed for room ${roomId}, checking if auto-skip needed...`);
+    
+    if (!rooms[roomId] || rooms[roomId].gameState !== 'playing') {
+      console.log(`[Timer] Game state changed, not auto-skipping. gameState=${rooms[roomId]?.gameState}`);
+      return;
+    }
+    
+    if (rooms[roomId].currentTurn !== currentTurn) {
+      console.log(`[Timer] Turn changed from ${currentTurn} to ${rooms[roomId].currentTurn}, not auto-skipping`);
+      return; // Turn has changed
+    }
+    
+    // Find the player
+    const playerIndex = rooms[roomId].players.findIndex(p => p.id === currentTurn);
+    if (playerIndex === -1) {
+      console.log(`[Timer] Player ${currentTurn} not found, not auto-skipping`);
+      return;
+    }
+    
+    const player = rooms[roomId].players[playerIndex];
+    const playerName = player?.username || currentTurn;
+    console.log(`[Timer] ⏰ Auto-skipping player ${playerName} (${currentTurn}) in room ${roomId} - 30 seconds elapsed`);
+    
+    // Auto-stand the player
+    player.status = 'stood';
+    rooms[roomId].players[playerIndex] = player;
+    
+    // Notify all players
+    io.to(roomId).emit('player_auto_skipped', {
+      playerId: currentTurn,
+      players: rooms[roomId].players
+    });
+    
+    // Clear the timer
+    delete turnTimers[roomId];
+    
+    // Move to next player's turn
+    nextPlayerTurn(roomId);
+  }, 30000); // 30 seconds
+}
+
 // Move to the next player's turn
 function nextPlayerTurn(roomId) {
+  // Clear any existing turn timer
+  clearTurnTimer(roomId);
   if (!rooms[roomId]) return;
   
   const currentTurnIndex = rooms[roomId].players.findIndex(p => p.id === rooms[roomId].currentTurn);
@@ -795,7 +1203,13 @@ function nextPlayerTurn(roomId) {
       players: rooms[roomId].players
     });
     
-    return;
+      // Start the 30-second auto-skip timer for the split hand
+      // Add a small delay to ensure the turn is fully set
+      setTimeout(() => {
+        startTurnTimer(roomId);
+      }, 100);
+      
+      return;
   }
   
   // Find the next player who hasn't played yet and is not spectating
@@ -840,7 +1254,7 @@ function nextPlayerTurn(roomId) {
         players: rooms[roomId].players
       });
       
-      // Recursively move to the next player
+      // Recursively move to the next player (timer will be started in nextPlayerTurn)
       setTimeout(() => {
         nextPlayerTurn(roomId);
       }, 1000);
@@ -856,6 +1270,12 @@ function nextPlayerTurn(roomId) {
         playerId: rooms[roomId].currentTurn,
         players: rooms[roomId].players
       });
+      
+      // Start the 30-second auto-skip timer for the new player
+      // Add a small delay to ensure the turn is fully set
+      setTimeout(() => {
+        startTurnTimer(roomId);
+      }, 100);
     }
   }
 }
@@ -863,6 +1283,9 @@ function nextPlayerTurn(roomId) {
 // Dealer's turn
 function dealerTurn(roomId) {
   if (!rooms[roomId]) return;
+  
+  // Clear any turn timers since dealer's turn is starting
+  clearTurnTimer(roomId);
   
   // Reveal dealer's cards
   io.to(roomId).emit('card_dealt', {
@@ -988,6 +1411,66 @@ function settleGame(roomId) {
         console.log(`Host ${player.username} has zero balance and is marked as spectating`);
       }
     }
+  }
+  
+  // Check if all players are spectating (everyone ran out of money)
+  const activePlayers = room.players.filter(p => !p.originalPlayer); // Exclude split hands
+  
+  console.log(`\n🔍 [settleGame] Checking reset condition for room ${roomId}:`);
+  console.log(`  Active players (excluding splits): ${activePlayers.length}`);
+  activePlayers.forEach(p => {
+    const isSpectating = p.status === 'spectating' || p.balance <= 0;
+    console.log(`    - ${p.username}: balance=${p.balance}, status=${p.status}, isSpectating=${isSpectating}`);
+  });
+  
+  const allPlayersSpectating = activePlayers.length > 0 && activePlayers.every(p => {
+    return p.status === 'spectating' || p.balance <= 0;
+  });
+  
+  console.log(`  ✅ [settleGame] All players spectating: ${allPlayersSpectating}`);
+  
+  // If everyone is spectating, reset the game (give everyone starting balance back)
+  if (allPlayersSpectating && activePlayers.length > 0) {
+    console.log(`\n🎮 [settleGame] RESETTING GAME - All players in room ${roomId} are spectating!`);
+    
+    const startingBalance = 1000;
+    
+    // Reset all players' balances and status
+    for (const player of room.players) {
+      // Skip split hands
+      if (player.originalPlayer) continue;
+      
+      player.balance = startingBalance;
+      player.status = null;
+      player.cards = [];
+      player.bet = 0;
+      player.score = 0;
+    }
+    
+    // Reset dealer
+    room.dealer = {
+      cards: [],
+      score: 0,
+      status: null
+    };
+    
+    // Reset game state to waiting
+    room.gameState = 'waiting';
+    room.currentTurn = null;
+    room.deck = [];
+    
+    // Clear any turn timers
+    clearTurnTimer(roomId);
+    
+    // Notify all players that the game has been reset
+    io.to(roomId).emit('game_reset', {
+      message: 'All players ran out of money! Game has been reset. Everyone starts with $1000 again.',
+      players: room.players,
+      gameState: 'waiting'
+    });
+    
+    console.log(`Game reset in room ${roomId}. All players now have $${startingBalance}`);
+    return; // Don't emit game_ended, since we reset instead
   }
   
   // Update game state

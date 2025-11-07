@@ -246,14 +246,97 @@ const SpectatorItem = styled.div`
   margin: 2px 0;
 `;
 
+const BettingStatusContainer = styled.div`
+  position: absolute;
+  bottom: 600px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.85);
+  border: 2px solid #e2b714;
+  border-radius: 15px;
+  padding: 15px 25px;
+  z-index: 110;
+  text-align: center;
+  min-width: 300px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+`;
+
+const BettingStatusTitle = styled.h2`
+  color: #e2b714;
+  margin: 0 0 15px 0;
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+`;
+
+const BettingStatusList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 15px;
+`;
+
+const BettingStatusItem = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 15px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: white;
+`;
+
+const BettingStatusBadge = styled.span`
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  ${props => props.$hasBet ? `
+    background-color: #4caf50;
+    color: white;
+  ` : `
+    background-color: #ff9800;
+    color: white;
+    animation: pulse 1.5s ease-in-out infinite;
+  `}
+  
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.6;
+    }
+  }
+`;
+
 const GameRoom = () => {
   const navigate = useNavigate();
   const { 
     connected, roomId, players, dealer, gameState, error,
     startGame, leaveRoom, getCurrentPlayer, isPlayerTurn, currentTurn,
     hintsEnabled, toggleHints, autoSkipNewRound, setAutoSkipNewRound,
-    startNewRound
+    startNewRound, kickPlayer, socket
   } = useGame();
+  
+  // Debug: Log when players array changes
+  useEffect(() => {
+    if (gameState === 'betting') {
+      console.log('🔄 [GameRoom] Players array updated:', players.map(p => ({
+        username: p.username,
+        bet: p.bet,
+        balance: p.balance,
+        status: p.status,
+        id: p.id
+      })));
+      console.log('🔄 [GameRoom] Players with bets:', players.filter(p => p.bet > 0).map(p => ({
+        username: p.username,
+        bet: p.bet
+      })));
+    }
+  }, [players, gameState]);
   
   // Redirect if not connected or no room joined
   useEffect(() => {
@@ -272,7 +355,8 @@ const GameRoom = () => {
   };
   
   // Check if user is the host (first player)
-  const isHost = players.length > 0 && currentPlayer?.id === players[0]?.id;
+  // Use socket.id directly from context to ensure accurate comparison
+  const isHost = players.length > 0 && socket?.id === players[0]?.id;
   
   // Debug log for host status
   if (isHost) {
@@ -282,6 +366,61 @@ const GameRoom = () => {
   // Handler for auto-skip toggle
   const handleAutoSkipToggle = () => {
     setAutoSkipNewRound(!autoSkipNewRound);
+  };
+  
+  // Handle kick player (used by PlayerSeat component)
+  const handleKickPlayer = (playerId) => {
+    if (!roomId) {
+      console.error('❌ No roomId available!');
+      alert('Error: No room ID found. Please refresh the page.');
+      return;
+    }
+    
+    kickPlayer(playerId);
+  };
+  
+  // Get betting status for all players
+  const getBettingStatus = () => {
+    if (gameState !== 'betting') return null;
+    
+    const activePlayers = players.filter(p => 
+      p.balance > 0 && p.status !== 'spectating' && !p.id.includes('-split')
+    );
+    
+    const playersWithBets = activePlayers.filter(p => p.bet > 0);
+    const playersWithoutBets = activePlayers.filter(p => p.bet === 0 || !p.bet);
+    
+    // Debug logging
+    console.log('📊 [getBettingStatus] Current status:', {
+      total: activePlayers.length,
+      withBets: playersWithBets.length,
+      withoutBets: playersWithoutBets.length,
+      players: activePlayers.map(p => ({
+        username: p.username,
+        bet: p.bet,
+        hasBet: p.bet > 0,
+        balance: p.balance,
+        status: p.status
+      })),
+      allPlayersRaw: players.map(p => ({
+        username: p.username,
+        bet: p.bet,
+        balance: p.balance,
+        status: p.status,
+        id: p.id
+      }))
+    });
+    
+    return {
+      total: activePlayers.length,
+      withBets: playersWithBets.length,
+      withoutBets: playersWithoutBets.length,
+      players: activePlayers.map(p => ({
+        username: p.username,
+        hasBet: (p.bet > 0),
+        bet: p.bet || 0
+      }))
+    };
   };
   
   // Render player seats based on number of players
@@ -312,6 +451,8 @@ const GameRoom = () => {
           isPlayerTurn={player.id === currentTurn}
           position={index}
           gameState={gameState}
+          isHost={isHost}
+          onKick={handleKickPlayer}
         />
       );
     });
@@ -479,6 +620,34 @@ const GameRoom = () => {
               </SpectatorsList>
             </SpectatorsContainer>
           )}
+          
+          {/* Betting Status Indicator */}
+          {gameState === 'betting' && (() => {
+            const bettingStatus = getBettingStatus();
+            if (!bettingStatus || bettingStatus.total === 0) return null;
+            
+            return (
+              <BettingStatusContainer key={`betting-status-${bettingStatus.withBets}-${bettingStatus.total}`}>
+                <BettingStatusTitle>
+                  <span role="img" aria-label="betting">💰</span>
+                  Betting Phase
+                </BettingStatusTitle>
+                <div style={{ color: '#e2b714', marginBottom: '10px' }}>
+                  {bettingStatus.withBets} of {bettingStatus.total} players have placed bets
+                </div>
+                <BettingStatusList>
+                  {bettingStatus.players.map((player, index) => (
+                    <BettingStatusItem key={`${player.username}-${player.hasBet}-${player.bet}`}>
+                      <span>{player.username}</span>
+                      <BettingStatusBadge $hasBet={player.hasBet}>
+                        {player.hasBet ? `✓ Bet: $${player.bet}` : 'Waiting...'}
+                      </BettingStatusBadge>
+                    </BettingStatusItem>
+                  ))}
+                </BettingStatusList>
+              </BettingStatusContainer>
+            );
+          })()}
         </GameTable>
         
         <SidebarContainer>

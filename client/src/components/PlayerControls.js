@@ -201,12 +201,16 @@ const PlayerControls = ({ currentPlayer, canSplit }) => {
   };
   
   // Convert card value to numeric value
+  // Note: Card values are stored as 'ace', 'king', 'queen', 'jack', or numbers as strings
   const getValue = (card) => {
     if (!card || !card.value) return 0;
     
-    if (['J', 'Q', 'K'].includes(card.value)) return 10;
-    if (card.value === 'A') return 11;
-    return parseInt(card.value, 10);
+    // Handle face cards and ace
+    if (card.value === 'ace') return 11;
+    if (['king', 'queen', 'jack'].includes(card.value)) return 10;
+    
+    // Handle numeric cards
+    return parseInt(card.value, 10) || 0;
   };
   
   // Get dealer's upcard value (only the visible card)
@@ -232,7 +236,8 @@ const PlayerControls = ({ currentPlayer, canSplit }) => {
                   getValue(player.cards[0]) === getValue(player.cards[1]);
     
     // Check if player has a soft hand (contains an Ace counted as 11)
-    const hasSoftHand = player.cards.some(card => card.value === 'A') && 
+    // A soft hand is one where an ace is counted as 11 and the total is <= 21
+    const hasSoftHand = player.cards.some(card => card.value === 'ace') && 
                         player.score <= 21;
     
     if (isPair) {
