@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
 import JoinRoom from '../components/JoinRoom';
@@ -30,6 +30,17 @@ const pulse = keyframes`
   }
 `;
 
+const comingSoon = keyframes`
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+`;
+
 const HomeContainer = styled.div`
   min-height: 100vh;
   background: linear-gradient(135deg, #0a0a0a 0%, #0a2219 50%, #000000 100%);
@@ -52,7 +63,7 @@ const HomeContainer = styled.div`
 
 const HeroSection = styled.section`
   padding-top: 120px;
-  padding-bottom: 80px;
+  padding-bottom: 60px;
   text-align: center;
   position: relative;
   z-index: 1;
@@ -91,18 +102,10 @@ const HeroSubtitle = styled.p`
   }
 `;
 
-const JoinRoomSection = styled.section`
-  max-width: 600px;
-  margin: 0 auto 80px;
-  padding: 0 20px;
-  position: relative;
-  z-index: 1;
-`;
-
-const FeaturesSection = styled.section`
-  max-width: 1200px;
+const GamesSection = styled.section`
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 80px 20px;
+  padding: 60px 20px;
   position: relative;
   z-index: 1;
 `;
@@ -115,6 +118,114 @@ const SectionTitle = styled.h2`
   text-transform: uppercase;
   letter-spacing: 2px;
   font-weight: 700;
+  
+  @media (max-width: 768px) {
+    font-size: 32px;
+  }
+`;
+
+const GamesGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 30px;
+  margin-bottom: 60px;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+`;
+
+const GameCard = styled.div`
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  border-radius: 20px;
+  padding: 40px 30px;
+  text-align: center;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(212, 175, 55, 0.1) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  &:hover {
+    transform: translateY(-10px);
+    border-color: #d4af37;
+    box-shadow: 0 10px 40px rgba(212, 175, 55, 0.3);
+    
+    &::before {
+      opacity: 1;
+    }
+  }
+`;
+
+const GameIcon = styled.div`
+  font-size: 80px;
+  margin-bottom: 20px;
+  animation: ${props => props.$active ? float : 'none'} 3s ease-in-out infinite;
+  filter: ${props => props.$wip ? 'grayscale(50%)' : 'none'};
+`;
+
+const GameTitle = styled.h3`
+  font-size: 32px;
+  color: #d4af37;
+  margin-bottom: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+`;
+
+const GameDescription = styled.p`
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+  font-size: 16px;
+  margin-bottom: 20px;
+  min-height: 60px;
+`;
+
+const ComingSoonBadge = styled.div`
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.9) 0%, rgba(255, 87, 34, 0.9) 100%);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  animation: ${comingSoon} 2s ease-in-out infinite;
+  box-shadow: 0 4px 15px rgba(255, 152, 0, 0.4);
+`;
+
+
+const JoinRoomSection = styled.section`
+  max-width: 600px;
+  margin: 40px auto 80px;
+  padding: 0 20px;
+  position: relative;
+  z-index: 1;
+  display: ${props => props.$show ? 'block' : 'none'};
+`;
+
+const FeaturesSection = styled.section`
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 80px 20px;
+  position: relative;
+  z-index: 1;
 `;
 
 const FeaturesGrid = styled.div`
@@ -237,74 +348,212 @@ const Footer = styled.footer`
   z-index: 1;
 `;
 
+const WipMessage = styled.div`
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  border: 2px solid rgba(255, 152, 0, 0.5);
+  border-radius: 16px;
+  padding: 60px 40px;
+  max-width: 600px;
+  width: 100%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(255, 152, 0, 0.2);
+  backdrop-filter: blur(10px);
+  text-align: center;
+`;
+
+const WipIcon = styled.div`
+  font-size: 80px;
+  margin-bottom: 20px;
+  animation: ${pulse} 2s ease-in-out infinite;
+`;
+
+const WipTitle = styled.h2`
+  color: #ff9800;
+  font-size: 32px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 20px;
+  text-shadow: 0 0 20px rgba(255, 152, 0, 0.5);
+`;
+
+const WipDescription = styled.p`
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
+  line-height: 1.6;
+  margin-bottom: 30px;
+`;
+
+const BackButton = styled.button`
+  background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+  color: #0a2219;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.6);
+    background: linear-gradient(135deg, #f4d03f 0%, #d4af37 100%);
+  }
+`;
+
 const Home = () => {
+  const [selectedGame, setSelectedGame] = useState(null);
+
+  const games = [
+    {
+      id: 'blackjack',
+      name: 'Blackjack',
+      icon: '🃏',
+      description: 'Play classic blackjack with friends in real-time. Create rooms, invite players, and compete for the top spot on the leaderboard.',
+      active: true,
+      wip: false
+    },
+    {
+      id: 'roulette',
+      name: 'Roulette',
+      icon: '🎰',
+      description: 'Experience the excitement of European Roulette. Place your bets on red, black, numbers, or combinations. Coming soon!',
+      active: false,
+      wip: true
+    },
+    {
+      id: 'slots',
+      name: 'Slots',
+      icon: '🎲',
+      description: 'Spin the reels and win big! Multiple slot machines with exciting themes and bonus features. Coming soon!',
+      active: false,
+      wip: true
+    }
+  ];
+
+  const selectedGameData = games.find(g => g.id === selectedGame);
+
   return (
     <HomeContainer>
       <HeroSection>
         <HeroTitle>Luxury Casino</HeroTitle>
-        <HeroSubtitle>Experience the thrill of professional blackjack</HeroSubtitle>
+        <HeroSubtitle>Choose your game and experience the thrill</HeroSubtitle>
       </HeroSection>
       
-      <JoinRoomSection>
-        <JoinRoom />
-      </JoinRoomSection>
+      {!selectedGame ? (
+        <GamesSection>
+          <SectionTitle>Our Games</SectionTitle>
+          <GamesGrid>
+            {games.map((game) => (
+              <GameCard
+                key={game.id}
+                $active={true}
+                $wip={game.wip}
+                onClick={() => setSelectedGame(game.id)}
+              >
+                {game.wip && <ComingSoonBadge>Coming Soon</ComingSoonBadge>}
+                <GameIcon $active={true} $wip={game.wip}>
+                  {game.icon}
+                </GameIcon>
+                <GameTitle>{game.name}</GameTitle>
+                <GameDescription>{game.description}</GameDescription>
+              </GameCard>
+            ))}
+          </GamesGrid>
+        </GamesSection>
+      ) : (
+        <JoinRoomSection $show={true}>
+          {selectedGameData?.wip ? (
+            <WipMessage>
+              <WipIcon>{selectedGameData.icon}</WipIcon>
+              <WipTitle>{selectedGameData.name} - Coming Soon</WipTitle>
+              <WipDescription>
+                We're working hard to bring you an amazing {selectedGameData.name.toLowerCase()} experience! 
+                This game is currently in development and will be available soon. Check back later for updates!
+              </WipDescription>
+              <BackButton onClick={() => setSelectedGame(null)}>
+                ← Back to Games
+              </BackButton>
+            </WipMessage>
+          ) : (
+            <>
+              <div style={{ maxWidth: '600px', margin: '0 auto', padding: '0 20px' }}>
+                <BackButton 
+                  onClick={() => setSelectedGame(null)}
+                  style={{ marginBottom: '30px' }}
+                >
+                  ← Back to Games
+                </BackButton>
+              </div>
+              <JoinRoom />
+            </>
+          )}
+        </JoinRoomSection>
+      )}
       
-      <FeaturesSection>
-        <SectionTitle>Why Choose Us</SectionTitle>
-        <FeaturesGrid>
-          <FeatureCard>
-            <FeatureIcon $delay={0}>🎰</FeatureIcon>
-            <FeatureTitle>Real-Time Multiplayer</FeatureTitle>
-            <FeatureDescription>
-              Play with friends in real-time. Create private rooms and invite players for the ultimate blackjack experience.
-            </FeatureDescription>
-          </FeatureCard>
+      {!selectedGame && (
+        <>
+          <FeaturesSection>
+            <SectionTitle>Why Choose Us</SectionTitle>
+            <FeaturesGrid>
+              <FeatureCard>
+                <FeatureIcon $delay={0}>🎰</FeatureIcon>
+                <FeatureTitle>Real-Time Multiplayer</FeatureTitle>
+                <FeatureDescription>
+                  Play with friends in real-time. Create private rooms and invite players for the ultimate gaming experience.
+                </FeatureDescription>
+              </FeatureCard>
+              
+              <FeatureCard>
+                <FeatureIcon $delay={0.5}>🏆</FeatureIcon>
+                <FeatureTitle>Competitive Leaderboard</FeatureTitle>
+                <FeatureDescription>
+                  Climb the ranks and compete with players worldwide. Track your wins and become a champion.
+                </FeatureDescription>
+              </FeatureCard>
+              
+              <FeatureCard>
+                <FeatureIcon $delay={1}>💎</FeatureIcon>
+                <FeatureTitle>Professional Experience</FeatureTitle>
+                <FeatureDescription>
+                  Enjoy a premium casino experience with smooth gameplay, beautiful graphics, and authentic game rules.
+                </FeatureDescription>
+              </FeatureCard>
+              
+              <FeatureCard>
+                <FeatureIcon $delay={1.5}>🎲</FeatureIcon>
+                <FeatureTitle>Fair & Secure</FeatureTitle>
+                <FeatureDescription>
+                  Play with confidence knowing every game is fair, secure, and uses industry-standard algorithms.
+                </FeatureDescription>
+              </FeatureCard>
+              
+              <FeatureCard>
+                <FeatureIcon $delay={2}>⚡</FeatureIcon>
+                <FeatureTitle>Fast & Responsive</FeatureTitle>
+                <FeatureDescription>
+                  Lightning-fast gameplay with instant updates. No lag, no waiting - just pure gaming action.
+                </FeatureDescription>
+              </FeatureCard>
+              
+              <FeatureCard>
+                <FeatureIcon $delay={2.5}>🎯</FeatureIcon>
+                <FeatureTitle>More Games Coming</FeatureTitle>
+                <FeatureDescription>
+                  We're constantly adding new games. Roulette and Slots are in development - stay tuned!
+                </FeatureDescription>
+              </FeatureCard>
+            </FeaturesGrid>
+          </FeaturesSection>
           
-          <FeatureCard>
-            <FeatureIcon $delay={0.5}>🏆</FeatureIcon>
-            <FeatureTitle>Competitive Leaderboard</FeatureTitle>
-            <FeatureDescription>
-              Climb the ranks and compete with players worldwide. Track your wins and become a blackjack champion.
-            </FeatureDescription>
-          </FeatureCard>
-          
-          <FeatureCard>
-            <FeatureIcon $delay={1}>💎</FeatureIcon>
-            <FeatureTitle>Professional Experience</FeatureTitle>
-            <FeatureDescription>
-              Enjoy a premium casino experience with smooth gameplay, beautiful graphics, and authentic blackjack rules.
-            </FeatureDescription>
-          </FeatureCard>
-          
-          <FeatureCard>
-            <FeatureIcon $delay={1.5}>🎲</FeatureIcon>
-            <FeatureTitle>Fair & Secure</FeatureTitle>
-            <FeatureDescription>
-              Play with confidence knowing every game is fair, secure, and uses industry-standard shuffling algorithms.
-            </FeatureDescription>
-          </FeatureCard>
-          
-          <FeatureCard>
-            <FeatureIcon $delay={2}>⚡</FeatureIcon>
-            <FeatureTitle>Fast & Responsive</FeatureTitle>
-            <FeatureDescription>
-              Lightning-fast gameplay with instant updates. No lag, no waiting - just pure blackjack action.
-            </FeatureDescription>
-          </FeatureCard>
-          
-          <FeatureCard>
-            <FeatureIcon $delay={2.5}>🎯</FeatureIcon>
-            <FeatureTitle>Strategy Hints</FeatureTitle>
-            <FeatureDescription>
-              Learn optimal play with built-in strategy hints. Perfect for beginners and experienced players alike.
-            </FeatureDescription>
-          </FeatureCard>
-        </FeaturesGrid>
-      </FeaturesSection>
-      
-      <CtaSection>
-        <CtaButton to="/">Start Playing Now</CtaButton>
-      </CtaSection>
+          <CtaSection>
+            <CtaButton to="/">Start Playing Now</CtaButton>
+          </CtaSection>
+        </>
+      )}
       
       <Footer>
         © 2024 Luxury Casino - Play Responsibly | 18+ Only
