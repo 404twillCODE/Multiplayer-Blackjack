@@ -194,20 +194,34 @@ const GameHistory = () => {
               </RoundHeader>
               
               <ResultGrid>
-                {round.results && round.results.map((result, playerIndex) => (
-                  <PlayerResult 
-                    key={playerIndex} 
-                    result={result.outcome}
-                  >
-                    <Username>{result.username}</Username>
-                    <ResultLabel result={result.outcome}>
-                      {getResultLabel(result.outcome)}
-                    </ResultLabel>
-                    <AmountChange amount={result.amountChange}>
-                      {result.amountChange > 0 ? '+' : ''}{result.amountChange}
-                    </AmountChange>
-                  </PlayerResult>
-                ))}
+                {round.results && round.results
+                  .filter(result => {
+                    // Filter out spectating players
+                    // Players are spectating if:
+                    // 1. They have outcome 'spectating'
+                    // 2. They have amountChange === 0 and no meaningful outcome (no bet placed)
+                    if (result.outcome === 'spectating') {
+                      return false;
+                    }
+                    if (result.amountChange === 0 && (!result.outcome || result.outcome === '')) {
+                      return false; // No bet, no outcome = spectating
+                    }
+                    return true;
+                  })
+                  .map((result, playerIndex) => (
+                    <PlayerResult 
+                      key={playerIndex} 
+                      result={result.outcome}
+                    >
+                      <Username>{result.username}</Username>
+                      <ResultLabel result={result.outcome}>
+                        {getResultLabel(result.outcome)}
+                      </ResultLabel>
+                      <AmountChange amount={result.amountChange}>
+                        {result.amountChange > 0 ? '+' : ''}{result.amountChange}
+                      </AmountChange>
+                    </PlayerResult>
+                  ))}
               </ResultGrid>
             </HistoryItem>
           ))

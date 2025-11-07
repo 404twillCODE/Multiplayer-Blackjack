@@ -1,5 +1,5 @@
-import React from 'react';
-import styled from 'styled-components';
+import React, { useState, useEffect } from 'react';
+import styled, { keyframes } from 'styled-components';
 
 const CardContainer = styled.div`
   position: relative;
@@ -123,13 +123,26 @@ const getCardValue = (value) => {
   }
 };
 
-const Card = ({ card, hidden = false }) => {
+const Card = ({ card, hidden = false, isNewCard = false }) => {
+  const [shouldAnimate, setShouldAnimate] = useState(isNewCard);
+  
+  useEffect(() => {
+    if (isNewCard) {
+      setShouldAnimate(true);
+      // Reset animation after it completes
+      const timer = setTimeout(() => {
+        setShouldAnimate(false);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [isNewCard]);
+  
   if (!card && !hidden) return null;
   
   // If card is hidden, just show the back
   if (hidden) {
     return (
-      <CardContainer $hidden={true}>
+      <CardContainer $hidden={true} $isNewCard={shouldAnimate}>
         <CardPattern $hidden={true} />
         <CardBack $hidden={true} />
       </CardContainer>
@@ -142,7 +155,7 @@ const Card = ({ card, hidden = false }) => {
   const displayValue = getCardValue(value);
   
   return (
-    <CardContainer $color={color}>
+    <CardContainer $color={color} $isNewCard={shouldAnimate}>
       <CardTop>
         <CardValue>{displayValue}</CardValue>
         <CardSuit>{suitSymbol}</CardSuit>

@@ -21,6 +21,7 @@ const PORT = process.env.PORT || 5000;
 const rooms = {};
 const leaderboard = [];
 const turnTimers = {}; // Store timers for auto-skipping players after 30 seconds
+const autoSkippedPlayers = {}; // Track which players have been auto-skipped to prevent duplicate messages
 
 // Card deck utilities
 const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
@@ -314,33 +315,28 @@ io.on('connection', (socket) => {
     // Check if player busted
     if (player.score > 21) {
       player.status = 'busted';
-      
-      // Update player in room
-      rooms[roomId].players[playerIndex] = player;
-      
-      // Emit card dealt event
-      io.to(roomId).emit('card_dealt', {
-        to: player.id,
-        cards: player.cards,
-        score: player.score
-      });
-      
-      // Move to next player's turn
-      nextPlayerTurn(roomId);
-    } else {
-      // Update player in room
-      rooms[roomId].players[playerIndex] = player;
-      
-      // Emit card dealt event
-      io.to(roomId).emit('card_dealt', {
-        to: player.id,
-        cards: player.cards,
-        score: player.score
-      });
-      
-      // Restart the timer since player is still in their turn
-      startTurnTimer(roomId);
     }
+    
+    // Update player in room
+    rooms[roomId].players[playerIndex] = player;
+    
+    // Emit card dealt event with delay for animation
+    setTimeout(() => {
+      io.to(roomId).emit('card_dealt', {
+        to: targetHandId,
+        cards: [...player.cards],
+        score: player.score,
+        isNewCard: true
+      });
+      
+      // Move to next player's turn if busted
+      if (player.score > 21) {
+        nextPlayerTurn(roomId);
+      } else {
+        // Restart the timer since player is still in their turn
+        startTurnTimer(roomId);
+      }
+    }, 200);
   });
   
   // Stand (end turn)
@@ -1012,92 +1008,141 @@ io.on('connection', (socket) => {
 function dealInitialCards(roomId) {
   if (!rooms[roomId]) return;
   
-  // Deal 2 cards to each player who has placed a bet
+  let cardIndex = 0;
+  const dealDelay = 400; // 400ms delay between each card
+  
+  // First, mark spectators
   for (let i = 0; i < rooms[roomId].players.length; i++) {
     const player = rooms[roomId].players[i];
     
-    // Skip players who didn't place a bet (only mark as spectating if they have no bet)
     if (player.bet === 0) {
       player.status = 'spectating';
-      player.cards = []; // Ensure spectators have no cards
+      player.cards = [];
       player.score = 0;
       rooms[roomId].players[i] = player;
       
-      // Emit an event to notify all clients that this player is spectating
       io.to(roomId).emit('player_spectating', {
         playerId: player.id,
         username: player.username
       });
-      
-      continue;
-    }
-    
-    player.cards = [
-      rooms[roomId].deck.pop(),
-      rooms[roomId].deck.pop()
-    ];
-    player.score = calculateHandValue(player.cards);
-    
-    // Check for blackjack
-    if (isBlackjack(player.cards)) {
-      player.status = 'blackjack';
-    }
-    
-    // Update player in room
-    rooms[roomId].players[i] = player;
-    
-    // Emit card dealt event
-    io.to(roomId).emit('card_dealt', {
-      to: player.id,
-      cards: player.cards,
-      score: player.score
-    });
-  }
-  
-  // Deal 2 cards to dealer
-  rooms[roomId].dealer.cards = [
-    rooms[roomId].deck.pop(),
-    rooms[roomId].deck.pop()
-  ];
-  rooms[roomId].dealer.score = calculateHandValue(rooms[roomId].dealer.cards);
-  
-  // Find the first player who is not spectating or has blackjack
-  const firstActivePlayerIndex = rooms[roomId].players.findIndex(p => 
-    p.status !== 'spectating' && p.status !== 'blackjack'
-  );
-  
-  // Check if the first player has blackjack and move to the next player if needed
-  if (rooms[roomId].players.length > 0 && firstActivePlayerIndex !== -1) {
-    // Set the current turn to the first active player
-    rooms[roomId].currentTurn = rooms[roomId].players[firstActivePlayerIndex].id;
-    
-    // If the player has blackjack, move to the next player
-    if (rooms[roomId].players[firstActivePlayerIndex].status === 'blackjack') {
-      nextPlayerTurn(roomId);
     } else {
-      // Emit player turn event
-      io.to(roomId).emit('player_turn', {
-        playerId: rooms[roomId].currentTurn,
-        players: rooms[roomId].players
-      });
-      
-      // Start the 30-second auto-skip timer for the first player
-      // Add a small delay to ensure the turn is fully set
-      setTimeout(() => {
-        startTurnTimer(roomId);
-      }, 100);
+      // Initialize cards array for active players
+      player.cards = [];
+      rooms[roomId].players[i] = player;
     }
-  } else if (rooms[roomId].players.some(p => p.status !== 'spectating')) {
-    // If all players have blackjack or are spectating but at least one player is not spectating,
-    // move directly to dealer's turn
-    rooms[roomId].currentTurn = 'dealer';
-    io.to(roomId).emit('dealer_turn');
-    
-    // Start dealer's turn after a short delay
-    setTimeout(() => {
-      dealerTurn(roomId);
-    }, 1000);
   }
+  
+  // Deal first card to each player (round 1)
+  for (let i = 0; i < rooms[roomId].players.length; i++) {
+    const player = rooms[roomId].players[i];
+    
+    if (player.bet === 0) continue;
+    
+    setTimeout(() => {
+      const card = rooms[roomId].deck.pop();
+      player.cards.push(card);
+      player.score = calculateHandValue(player.cards);
+      rooms[roomId].players[i] = player;
+      
+      io.to(roomId).emit('card_dealt', {
+        to: player.id,
+        cards: [...player.cards],
+        score: player.score,
+        isNewCard: true
+      });
+    }, cardIndex * dealDelay);
+    
+    cardIndex++;
+  }
+  
+  // Deal first card to dealer
+  setTimeout(() => {
+    const card = rooms[roomId].deck.pop();
+    rooms[roomId].dealer.cards = [card];
+    rooms[roomId].dealer.score = calculateHandValue(rooms[roomId].dealer.cards);
+    
+    io.to(roomId).emit('card_dealt', {
+      to: 'dealer',
+      dealer: { ...rooms[roomId].dealer },
+      isNewCard: true
+    });
+  }, cardIndex * dealDelay);
+  
+  cardIndex++;
+  
+  // Deal second card to each player (round 2)
+  for (let i = 0; i < rooms[roomId].players.length; i++) {
+    const player = rooms[roomId].players[i];
+    
+    if (player.bet === 0) continue;
+    
+    setTimeout(() => {
+      const card = rooms[roomId].deck.pop();
+      player.cards.push(card);
+      player.score = calculateHandValue(player.cards);
+      
+      // Check for blackjack
+      if (isBlackjack(player.cards)) {
+        player.status = 'blackjack';
+      }
+      
+      rooms[roomId].players[i] = player;
+      
+      io.to(roomId).emit('card_dealt', {
+        to: player.id,
+        cards: [...player.cards],
+        score: player.score,
+        isNewCard: true
+      });
+    }, cardIndex * dealDelay);
+    
+    cardIndex++;
+  }
+  
+  // Deal second card to dealer
+  setTimeout(() => {
+    const card = rooms[roomId].deck.pop();
+    rooms[roomId].dealer.cards.push(card);
+    rooms[roomId].dealer.score = calculateHandValue(rooms[roomId].dealer.cards);
+    
+    // After all initial cards are dealt, set up the game
+    setTimeout(() => {
+      // Find the first player who is not spectating or has blackjack
+      const firstActivePlayerIndex = rooms[roomId].players.findIndex(p => 
+        p.status !== 'spectating' && p.status !== 'blackjack'
+      );
+      
+      if (rooms[roomId].players.length > 0 && firstActivePlayerIndex !== -1) {
+        rooms[roomId].currentTurn = rooms[roomId].players[firstActivePlayerIndex].id;
+        
+        if (rooms[roomId].players[firstActivePlayerIndex].status === 'blackjack') {
+          nextPlayerTurn(roomId);
+        } else {
+          io.to(roomId).emit('player_turn', {
+            playerId: rooms[roomId].currentTurn,
+            players: rooms[roomId].players
+          });
+          
+          setTimeout(() => {
+            startTurnTimer(roomId);
+          }, 100);
+        }
+      } else if (rooms[roomId].players.some(p => p.status !== 'spectating')) {
+        rooms[roomId].currentTurn = 'dealer';
+        io.to(roomId).emit('dealer_turn');
+        
+        setTimeout(() => {
+          dealerTurn(roomId);
+        }, 1000);
+      }
+    }, dealDelay);
+    
+    io.to(roomId).emit('card_dealt', {
+      to: 'dealer',
+      dealer: { ...rooms[roomId].dealer },
+      isNewCard: true
+    });
+  }, cardIndex * dealDelay);
 }
 
 // Clear the turn timer for a room
@@ -1107,6 +1152,12 @@ function clearTurnTimer(roomId) {
     clearTimeout(turnTimers[roomId]);
     delete turnTimers[roomId];
   }
+  // Clear auto-skipped flags for this room when clearing the timer (new turn starting)
+  Object.keys(autoSkippedPlayers).forEach(key => {
+    if (key.startsWith(`${roomId}-`)) {
+      delete autoSkippedPlayers[key];
+    }
+  });
 }
 
 // Start a timer to auto-skip a player after 30 seconds
@@ -1152,16 +1203,30 @@ function startTurnTimer(roomId) {
     
     const player = rooms[roomId].players[playerIndex];
     const playerName = player?.username || currentTurn;
+    
+    // Check if we've already auto-skipped this player for this turn
+    const skipKey = `${roomId}-${currentTurn}`;
+    if (autoSkippedPlayers[skipKey]) {
+      console.log(`[Timer] Player ${playerName} already auto-skipped, skipping duplicate emission`);
+      delete turnTimers[roomId];
+      return;
+    }
+    
     console.log(`[Timer] ⏰ Auto-skipping player ${playerName} (${currentTurn}) in room ${roomId} - 30 seconds elapsed`);
+    
+    // Mark this player as auto-skipped
+    autoSkippedPlayers[skipKey] = true;
     
     // Auto-stand the player
     player.status = 'stood';
     rooms[roomId].players[playerIndex] = player;
     
-    // Notify all players
+    // Notify all players (only once)
     io.to(roomId).emit('player_auto_skipped', {
       playerId: currentTurn,
-      players: rooms[roomId].players
+      username: playerName,
+      players: rooms[roomId].players,
+      timestamp: Date.now() // Add timestamp to help client-side deduplication
     });
     
     // Clear the timer
@@ -1299,11 +1364,14 @@ function dealerTurn(roomId) {
     rooms[roomId].dealer.cards.push(card);
     rooms[roomId].dealer.score = calculateHandValue(rooms[roomId].dealer.cards);
     
-    // Emit card dealt event
-    io.to(roomId).emit('card_dealt', {
-      to: 'dealer',
-      dealer: rooms[roomId].dealer
-    });
+    // Emit card dealt event with delay for animation
+    setTimeout(() => {
+      io.to(roomId).emit('card_dealt', {
+        to: 'dealer',
+        dealer: { ...rooms[roomId].dealer },
+        isNewCard: true
+      });
+    }, 500);
   }
   
   // Set dealer status

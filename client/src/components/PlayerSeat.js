@@ -1,6 +1,26 @@
 import React from 'react';
-import styled from 'styled-components';
+import styled, { keyframes, css } from 'styled-components';
 import Card from './Card';
+
+const glow = keyframes`
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.3),
+                0 0 20px rgba(76, 175, 80, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.4),
+                0 0 25px rgba(76, 175, 80, 0.3);
+  }
+`;
+
+const borderGlow = keyframes`
+  0%, 100% {
+    border-color: rgba(76, 175, 80, 0.5);
+  }
+  50% {
+    border-color: rgba(76, 175, 80, 0.7);
+  }
+`;
 
 const SeatContainer = styled.div`
   display: flex;
@@ -9,6 +29,16 @@ const SeatContainer = styled.div`
   width: 200px;
   position: relative;
   margin: 0 15px 20px;
+  padding: 15px;
+  border-radius: 20px;
+  border: ${props => props.$isPlayerTurn 
+    ? '2px solid rgba(76, 175, 80, 0.5)' 
+    : '2px solid transparent'};
+  transition: all 0.3s ease;
+  ${props => props.$isPlayerTurn && css`
+    animation: ${glow} 3s ease-in-out infinite, ${borderGlow} 3s ease-in-out infinite;
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.08) 0%, rgba(10, 34, 25, 0.2) 100%);
+  `}
 `;
 
 const UsernameDisplay = styled.div`
@@ -128,33 +158,6 @@ const StatusBadge = styled.div`
   z-index: 10;
 `;
 
-const YourTurnIndicator = styled.div`
-  position: absolute;
-  top: -10px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: #e2b714;
-  color: #000;
-  padding: 3px 10px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: bold;
-  animation: pulse 1.5s infinite;
-  z-index: 20;
-  
-  @keyframes pulse {
-    0% {
-      box-shadow: 0 0 0 0 rgba(226, 183, 20, 0.7);
-    }
-    70% {
-      box-shadow: 0 0 0 10px rgba(226, 183, 20, 0);
-    }
-    100% {
-      box-shadow: 0 0 0 0 rgba(226, 183, 20, 0);
-    }
-  }
-`;
-
 const getStatusLabel = (status) => {
   switch (status) {
     case 'busted':
@@ -212,9 +215,6 @@ const PlayerSeat = ({
   // Check if this is a split hand belonging to the current player
   const isSplitHandOfCurrentPlayer = player.id.includes('-split') && isCurrentPlayer;
   
-  // Don't show "Your Turn" indicator if player has blackjack
-  const showTurnIndicator = isPlayerTurn && status !== 'blackjack';
-  
   // Show kick button only if:
   // - User is host
   // - Not kicking themselves
@@ -235,6 +235,7 @@ const PlayerSeat = ({
   
   return (
     <SeatContainer 
+      $isPlayerTurn={isPlayerTurn}
       onMouseEnter={(e) => {
         if (showKickButton) {
           e.currentTarget.querySelector('button')?.style.setProperty('opacity', '1');
@@ -252,7 +253,6 @@ const PlayerSeat = ({
         </KickButton>
       )}
       
-      {showTurnIndicator && <YourTurnIndicator>Your Turn</YourTurnIndicator>}
       
       <UsernameDisplay $isCurrentPlayer={isCurrentPlayer || isSplitHandOfCurrentPlayer}>
         {username}
@@ -263,9 +263,11 @@ const PlayerSeat = ({
       </BalanceDisplay>
       
       <CardArea>
-        {cards && cards.map((card, index) => (
-          <Card key={index} card={card} />
-        ))}
+        {cards && cards.map((card, index) => {
+          // Check if this is the newest card (last card in array)
+          const isNewCard = index === cards.length - 1;
+          return <Card key={`${card.suit}-${card.value}-${index}`} card={card} isNewCard={isNewCard} />;
+        })}
       </CardArea>
       
       {score > 0 && <ScoreChip $score={score}>{score}</ScoreChip>}

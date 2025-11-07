@@ -147,7 +147,9 @@ const DealerArea = ({ dealer, gameState, currentTurn }) => {
         {cards && cards.map((card, index) => {
           // Hide the second card if game is still in progress and not dealer's turn
           const isHidden = index === 1 && !showAllCards;
-          return <Card key={index} card={card} hidden={isHidden} />;
+          // Check if this is the newest card (last card in array)
+          const isNewCard = index === cards.length - 1;
+          return <Card key={`${card.suit}-${card.value}-${index}`} card={card} hidden={isHidden} isNewCard={isNewCard} />;
         })}
         
         {cards && cards.length > 0 && showAllCards && (

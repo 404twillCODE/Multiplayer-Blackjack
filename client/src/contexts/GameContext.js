@@ -260,19 +260,36 @@ export const GameProvider = ({ children }) => {
       });
     });
     
-    socket.on('player_auto_skipped', (data) => {
+    // Track the last auto-skip message to prevent duplicates
+    let lastAutoSkipKey = null;
+    
+    const handlePlayerAutoSkipped = (data) => {
       if (!data) return;
+      
+      // Create a unique key for this auto-skip event
+      const skipKey = `${data.playerId}-${data.timestamp || Date.now()}`;
+      
+      // Prevent duplicate messages
+      if (lastAutoSkipKey === skipKey) {
+        console.log('[Client] Duplicate auto-skip message ignored');
+        return;
+      }
+      
+      lastAutoSkipKey = skipKey;
+      
       setPlayers(data.players || players);
       setCurrentTurn(null);
       
-      const player = data.players && data.players.find(p => p.id === data.playerId);
+      const playerName = data.username || (data.players && data.players.find(p => p.id === data.playerId)?.username) || 'A player';
       
       addMessage({
-        content: `${player ? player.username : 'A player'} was automatically skipped (30 seconds elapsed)`,
+        content: `${playerName} was automatically skipped (30 seconds elapsed)`,
         type: 'system',
         timestamp: Date.now()
       });
-    });
+    };
+    
+    socket.on('player_auto_skipped', handlePlayerAutoSkipped);
     
     socket.on('card_dealt', (data) => {
       if (!data) return;
@@ -469,6 +486,7 @@ export const GameProvider = ({ children }) => {
       socket.off('leaderboard_updated');
       socket.off('player_split');
       socket.off('player_spectating');
+      socket.off('player_auto_skipped');
     };
   }, [socket, autoSkipNewRound, players, startNewRound]);
   
