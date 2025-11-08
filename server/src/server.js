@@ -1142,18 +1142,25 @@ function dealInitialCards(roomId) {
   let cardIndex = 0;
   const dealDelay = 650; // 650ms delay between each card for realistic dealing pace
   
-  // First, mark spectators and initialize card arrays
+  // First, initialize card arrays and reset status for active players
   // Don't emit player_spectating here - it's already been emitted in new_round
   for (let i = 0; i < rooms[roomId].players.length; i++) {
     const player = rooms[roomId].players[i];
     
-    if (player.bet === 0 || player.status === 'spectating') {
+    // Only mark as spectating if they have no bet AND no balance
+    if (player.bet === 0 && (player.balance <= 0 || player.status === 'spectating')) {
       player.status = 'spectating';
       player.cards = [];
       player.score = 0;
       rooms[roomId].players[i] = player;
     } else {
+      // Active player - reset status (will be set to 'blackjack' if they get it)
+      // Clear any previous status except keep 'spectating' if they were already spectating
+      if (player.status !== 'spectating') {
+        player.status = null; // Clear status so they can play
+      }
       player.cards = [];
+      player.score = 0;
       rooms[roomId].players[i] = player;
     }
   }
@@ -1249,18 +1256,27 @@ function dealInitialCards(roomId) {
     setTimeout(() => {
       // Find first active player (not spectating, has bet, has balance, not a split hand)
       // Include players with blackjack - we'll skip them after finding them
+      // A player is active if they have a bet and are not spectating
       const firstActivePlayerIndex = rooms[roomId].players.findIndex(p => 
         !p.originalPlayer && 
         p.status !== 'spectating' && 
-        p.bet > 0 && 
-        p.balance > 0
+        p.bet > 0
       );
       
       console.log(`[Deal] Looking for first active player. Found index: ${firstActivePlayerIndex}, Total players: ${rooms[roomId].players.length}`);
+      console.log(`[Deal] All players:`, rooms[roomId].players.map(p => ({
+        username: p.username,
+        id: p.id,
+        bet: p.bet,
+        balance: p.balance,
+        status: p.status,
+        originalPlayer: p.originalPlayer,
+        isActive: !p.originalPlayer && p.status !== 'spectating' && p.bet > 0
+      })));
       
       if (firstActivePlayerIndex !== -1) {
         const firstPlayer = rooms[roomId].players[firstActivePlayerIndex];
-        console.log(`[Deal] First active player: ${firstPlayer.username}, Status: ${firstPlayer.status}, Has blackjack: ${firstPlayer.status === 'blackjack'}`);
+        console.log(`[Deal] First active player: ${firstPlayer.username} (${firstPlayer.id}), Status: ${firstPlayer.status}, Has blackjack: ${firstPlayer.status === 'blackjack'}`);
         
         // If the first player has blackjack, skip to next player
         if (firstPlayer.status === 'blackjack') {
@@ -1270,12 +1286,17 @@ function dealInitialCards(roomId) {
         } else {
           // Give the first player their turn
           rooms[roomId].currentTurn = firstPlayer.id;
-          console.log(`[Deal] Starting turn for player: ${firstPlayer.username} (${firstPlayer.id})`);
+          console.log(`[Deal] ✅ Starting turn for player: ${firstPlayer.username} (${firstPlayer.id}), currentTurn set to: ${rooms[roomId].currentTurn}`);
+          
+          // Make sure game state is playing
+          rooms[roomId].gameState = 'playing';
           
           io.to(roomId).emit('player_turn', {
             playerId: rooms[roomId].currentTurn,
             players: rooms[roomId].players
           });
+          
+          console.log(`[Deal] ✅ Emitted player_turn event for ${firstPlayer.username}`);
           
           setTimeout(() => {
             startTurnTimer(roomId);
@@ -1283,7 +1304,7 @@ function dealInitialCards(roomId) {
         }
       } else {
         // No active players found - this shouldn't happen if players have bets
-        console.log(`[Deal] WARNING: No active players found! Going straight to dealer.`);
+        console.log(`[Deal] ❌ WARNING: No active players found! Going straight to dealer.`);
         console.log(`[Deal] Players in room:`, rooms[roomId].players.map(p => ({
           username: p.username,
           bet: p.bet,
@@ -1460,10 +1481,11 @@ function nextPlayerTurn(roomId) {
     if (player.originalPlayer) continue;
     // Skip players who are spectating
     if (player.status === 'spectating') continue;
-    // Skip players with no balance or no bet
-    if (player.balance <= 0 || player.bet === 0) continue;
-    // Skip players who have already played (have any status like 'stood', 'bust', 'blackjack')
-    if (player.status) continue;
+    // Skip players with no bet
+    if (player.bet === 0) continue;
+    // Skip players who have already played (have a status like 'stood', 'bust', 'blackjack')
+    // But allow players with null/undefined status (haven't played yet)
+    if (player.status && player.status !== null && player.status !== undefined) continue;
     
     nextPlayerIndex = idx;
     break;
