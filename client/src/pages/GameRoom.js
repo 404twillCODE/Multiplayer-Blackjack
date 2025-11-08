@@ -740,30 +740,22 @@ const GameRoom = () => {
             <VotePromptContainer>
               <VoteTitle>💸 All Players Lost!</VoteTitle>
               <VoteMessage>
-                Everyone ran out of money! Vote to continue playing or reset the game.
+                Everyone ran out of money! Click continue to reset the game and start fresh.
               </VoteMessage>
               <VoteButtons>
                 <VoteButton
                   $voteType="continue"
-                  $selected={hasVoted && voteStatus?.votes?.[socket?.id] === 'continue'}
+                  $selected={hasVoted}
                   onClick={() => voteReset('continue')}
                   disabled={hasVoted}
                 >
                   ✅ Continue
                 </VoteButton>
-                <VoteButton
-                  $voteType="reset"
-                  $selected={hasVoted && voteStatus?.votes?.[socket?.id] === 'reset'}
-                  onClick={() => voteReset('reset')}
-                  disabled={hasVoted}
-                >
-                  🔄 Reset
-                </VoteButton>
               </VoteButtons>
               {voteStatus && (
                 <VoteStatus>
                   Votes: {voteStatus.votesReceived}/{voteStatus.totalPlayers} 
-                  ({voteStatus.continueVotes} Continue, {voteStatus.resetVotes} Reset)
+                  {voteStatus.votesReceived < voteStatus.totalPlayers && ' - Waiting for other players...'}
                 </VoteStatus>
               )}
             </VotePromptContainer>

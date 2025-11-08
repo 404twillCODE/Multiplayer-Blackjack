@@ -96,7 +96,7 @@ io.on('connection', (socket) => {
     socket.emit('pong', { message: 'Server is alive', timestamp: Date.now() });
   });
   
-  // Vote to continue or reset after all players lose
+  // Vote to continue after all players lose
   socket.on('vote_reset', ({ roomId, vote }) => {
     if (!rooms[roomId] || !rooms[roomId].players.find(p => p.id === socket.id)) {
       socket.emit('error', { message: 'Room not found or you are not in this room' });
@@ -108,31 +108,24 @@ io.on('connection', (socket) => {
       resetVotes[roomId] = {};
     }
     
-    // Record the vote
-    resetVotes[roomId][socket.id] = vote; // 'continue' or 'reset'
+    // Record the vote (only 'continue' is valid now)
+    resetVotes[roomId][socket.id] = 'continue';
     
     const room = rooms[roomId];
     const activePlayers = room.players.filter(p => !p.originalPlayer);
     const votes = resetVotes[roomId];
     const voteCount = Object.keys(votes).length;
-    const continueVotes = Object.values(votes).filter(v => v === 'continue').length;
-    const resetVotesCount = Object.values(votes).filter(v => v === 'reset').length;
-    
-    console.log(`[Vote] Player ${socket.id} voted ${vote} in room ${roomId}. Votes: ${voteCount}/${activePlayers.length}`);
     
     // Notify all players of current vote status
     io.to(roomId).emit('vote_status', {
       votes: votes,
       totalPlayers: activePlayers.length,
-      votesReceived: voteCount,
-      continueVotes: continueVotes,
-      resetVotes: resetVotesCount
+      votesReceived: voteCount
     });
     
     // Check if all players have voted
     if (voteCount >= activePlayers.length) {
-      // All players have voted - reset the game (both continue and reset do the same thing)
-      console.log(`[Vote] All players voted. Resetting game in room ${roomId}`);
+      // All players have voted - reset the game
       resetGameAfterVote(roomId);
     }
   });
@@ -1678,7 +1671,7 @@ function settleGame(roomId) {
       if (!rooms[roomId] || rooms[roomId].gameState !== 'ended') return;
       
       io.to(roomId).emit('vote_to_continue', {
-        message: 'All players ran out of money! Vote to continue or reset.',
+        message: 'All players ran out of money! Vote to continue and reset the game.',
         roomId: roomId
       });
     }, 2000);

@@ -403,7 +403,7 @@ export const GameProvider = ({ children }) => {
       setHasVoted(false);
       setVoteStatus(null);
       addMessage({
-        content: data.message || 'All players ran out of money! Vote to continue or reset.',
+        content: data.message || 'All players ran out of money! Vote to continue and reset the game.',
         type: 'system',
         timestamp: Date.now()
       });
