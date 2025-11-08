@@ -375,23 +375,23 @@ io.on('connection', (socket) => {
     // Update player in room
     rooms[roomId].players[playerIndex] = player;
     
-    // Emit card dealt event with delay for animation
-    setTimeout(() => {
-      io.to(roomId).emit('card_dealt', {
-        to: targetHandId,
-        cards: [...player.cards],
-        score: player.score,
-        isNewCard: true
-      });
-      
-      // Move to next player's turn if busted
-      if (player.score > 21) {
+    // Emit card dealt event immediately (animation is handled client-side)
+    io.to(roomId).emit('card_dealt', {
+      to: targetHandId,
+      cards: [...player.cards],
+      score: player.score,
+      isNewCard: true
+    });
+    
+    // Move to next player's turn if busted (with small delay for bust animation)
+    if (player.score > 21) {
+      setTimeout(() => {
         nextPlayerTurn(roomId);
-      } else {
-        // Restart the timer since player is still in their turn
-        startTurnTimer(roomId);
-      }
-    }, 500);
+      }, 500);
+    } else {
+      // Restart the timer since player is still in their turn
+      startTurnTimer(roomId);
+    }
   });
   
   // Stand (end turn)
