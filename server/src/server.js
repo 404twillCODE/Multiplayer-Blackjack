@@ -23,6 +23,7 @@ const leaderboard = [];
 const turnTimers = {}; // Store timers for auto-skipping players after 30 seconds
 const autoSkippedPlayers = {}; // Track which players have been auto-skipped to prevent duplicate messages
 const resetVotes = {}; // Track votes for game reset: { roomId: { playerId: 'continue' | 'reset' } }
+const pendingNextTurnTimers = {}; // Store pending nextPlayerTurn timeouts to prevent race conditions
 
 // Card deck utilities
 const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
@@ -385,7 +386,11 @@ io.on('connection', (socket) => {
     
     // Move to next player's turn if busted (with small delay for bust animation)
     if (player.score > 21) {
-      setTimeout(() => {
+      // Clear any existing pending nextPlayerTurn
+      clearPendingNextTurn(roomId);
+      // Set a new timeout to move to next player
+      pendingNextTurnTimers[roomId] = setTimeout(() => {
+        delete pendingNextTurnTimers[roomId];
         nextPlayerTurn(roomId);
       }, 500);
     } else {
@@ -424,6 +429,9 @@ io.on('connection', (socket) => {
       player.status = 'busted';
       rooms[roomId].players[playerIndex] = player;
       
+      // Clear any pending nextPlayerTurn from hit handler to prevent race conditions
+      clearPendingNextTurn(roomId);
+      
       // Emit updated player state
       io.to(roomId).emit('card_dealt', {
         to: targetHandId,
@@ -432,10 +440,12 @@ io.on('connection', (socket) => {
         isNewCard: false
       });
       
-      // Move to next player's turn after a short delay
-      setTimeout(() => {
+      // Move to next player's turn immediately (no delay needed since we already detected bust)
+      // Use a very short delay just to ensure state is propagated
+      pendingNextTurnTimers[roomId] = setTimeout(() => {
+        delete pendingNextTurnTimers[roomId];
         nextPlayerTurn(roomId);
-      }, 500);
+      }, 100);
       return;
     }
     
@@ -624,9 +634,31 @@ io.on('connection', (socket) => {
       players: rooms[roomId].players
     });
     
-    // If the first hand has blackjack, move to the next hand or player
+    // If the first hand has blackjack, move to the split hand (or next player if split also has blackjack)
     if (player.status === 'blackjack') {
-      nextPlayerTurn(roomId);
+      // Check if split hand also has blackjack
+      if (newHand.status === 'blackjack') {
+        // Both hands have blackjack, move to next player
+        nextPlayerTurn(roomId);
+      } else {
+        // Split hand doesn't have blackjack, move to it
+        rooms[roomId].currentTurn = newHand.id;
+        io.to(roomId).emit('player_turn', {
+          playerId: newHand.id,
+          players: rooms[roomId].players
+        });
+        setTimeout(() => {
+          startTurnTimer(roomId);
+        }, 100);
+      }
+    } else {
+      // First hand doesn't have blackjack, player continues playing the first hand
+      // The turn stays with the original hand (currentTurn is already set to player.id)
+      // When they finish the first hand, nextPlayerTurn will automatically move to the split hand
+      // Just make sure the turn timer is restarted
+      setTimeout(() => {
+        startTurnTimer(roomId);
+      }, 100);
     }
   });
   
@@ -1089,6 +1121,8 @@ io.on('connection', (socket) => {
         
         // Handle game state based on when player disconnected
         if (room.gameState === 'playing') {
+          // Clear any pending timers for this room
+          clearPendingNextTurn(roomId);
           // If it was their turn, move to next player
           if (room.currentTurn === socket.id) {
             nextPlayerTurn(roomId);
@@ -1271,11 +1305,27 @@ function dealInitialCards(roomId) {
     
     console.log(`[Deal] Dealing card 2 to dealer at ${Date.now()}`);
     
+    // Check if dealer has blackjack
+    const dealerHasBlackjack = isBlackjack(rooms[roomId].dealer.cards);
+    if (dealerHasBlackjack) {
+      rooms[roomId].dealer.status = 'blackjack';
+      console.log(`[Deal] Dealer has blackjack! Ending game immediately.`);
+    }
+    
+    // Reveal dealer's cards (show both cards)
     io.to(roomId).emit('card_dealt', {
       to: 'dealer',
       dealer: { ...rooms[roomId].dealer },
       isNewCard: true
     });
+    
+    // If dealer has blackjack, end the game immediately
+    if (dealerHasBlackjack) {
+      setTimeout(() => {
+        settleGame(roomId);
+      }, 1000); // Small delay to show the dealer's blackjack
+      return; // Don't continue with player turns
+    }
     
     // After all initial cards are dealt, set up the game
     setTimeout(() => {
@@ -1363,6 +1413,15 @@ function clearTurnTimer(roomId) {
       delete autoSkippedPlayers[key];
     }
   });
+}
+
+// Clear any pending nextPlayerTurn timeouts for a room
+function clearPendingNextTurn(roomId) {
+  if (pendingNextTurnTimers[roomId]) {
+    console.log(`[Timer] Clearing pending nextPlayerTurn for room ${roomId}`);
+    clearTimeout(pendingNextTurnTimers[roomId]);
+    delete pendingNextTurnTimers[roomId];
+  }
 }
 
 // Start a timer to auto-skip a player after 60 seconds
@@ -1458,8 +1517,9 @@ function startTurnTimer(roomId) {
 
 // Move to the next player's turn
 function nextPlayerTurn(roomId) {
-  // Clear any existing turn timer
+  // Clear any existing turn timer and pending next turn timers
   clearTurnTimer(roomId);
+  clearPendingNextTurn(roomId);
   if (!rooms[roomId]) return;
   
   const currentTurnIndex = rooms[roomId].players.findIndex(p => p.id === rooms[roomId].currentTurn);
@@ -1467,33 +1527,39 @@ function nextPlayerTurn(roomId) {
   
   // Check if the current player has a split hand that needs to be played
   const currentPlayer = rooms[roomId].players[currentTurnIndex];
-  const splitHandIndex = rooms[roomId].players.findIndex(p => 
-    p.originalPlayer === currentPlayer.id && !p.status
-  );
   
-  // If there's a split hand that hasn't been played yet, move to that hand
-  if (splitHandIndex !== -1) {
-    rooms[roomId].currentTurn = rooms[roomId].players[splitHandIndex].id;
-    
-    // Emit turn ended event
-    io.to(roomId).emit('turn_ended', {
-      nextTurn: rooms[roomId].currentTurn,
-      players: rooms[roomId].players
-    });
-    
-    // Emit player turn event
-    io.to(roomId).emit('player_turn', {
-      playerId: rooms[roomId].currentTurn,
-      players: rooms[roomId].players
-    });
-    
-      // Start the 30-second auto-skip timer for the split hand
+  // Only check for split hands if the current player is NOT a split hand themselves
+  // (i.e., they are the original hand)
+  if (!currentPlayer.originalPlayer) {
+    // Find any split hands for this original player that haven't been played yet
+    const splitHandIndex = rooms[roomId].players.findIndex(p => 
+      p.originalPlayer === currentPlayer.id && (!p.status || p.status === null || p.status === undefined)
+    );
+  
+    // If there's a split hand that hasn't been played yet, move to that hand
+    if (splitHandIndex !== -1) {
+      rooms[roomId].currentTurn = rooms[roomId].players[splitHandIndex].id;
+      
+      // Emit turn ended event
+      io.to(roomId).emit('turn_ended', {
+        nextTurn: rooms[roomId].currentTurn,
+        players: rooms[roomId].players
+      });
+      
+      // Emit player turn event
+      io.to(roomId).emit('player_turn', {
+        playerId: rooms[roomId].currentTurn,
+        players: rooms[roomId].players
+      });
+      
+      // Start the 60-second auto-skip timer for the split hand
       // Add a small delay to ensure the turn is fully set
       setTimeout(() => {
         startTurnTimer(roomId);
       }, 100);
       
       return;
+    }
   }
   
   // Find the next player who hasn't played yet and is not spectating

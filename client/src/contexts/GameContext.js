@@ -367,6 +367,9 @@ export const GameProvider = ({ children }) => {
       setCurrentTurn(null);
       setPlayers(data.players || []);
       
+      // Clear game history when game is reset
+      setGameHistory([]);
+      
       const currentPlayer = data.players?.find(p => p.id === socket.id);
       if (currentPlayer) {
         const newBalance = currentPlayer.balance;
