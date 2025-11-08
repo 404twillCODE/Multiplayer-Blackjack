@@ -1,18 +1,27 @@
 // Supabase server-side configuration
-// Note: For server-side operations, you may want to use the service role key
-// Keep this secure and never expose it to the client
-
-// For now, we'll use environment variables
-// In production, set these as environment variables on your server
+const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'YOUR_SUPABASE_URL';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'YOUR_SERVICE_ROLE_KEY';
 
-// Note: The server will primarily receive balance updates from the client
-// The client handles the Supabase operations directly for security
-// This file is here for potential future server-side operations
+// Create Supabase client with service role key for server-side operations
+// This bypasses RLS and allows server to perform admin operations
+let supabase = null;
+
+if (SUPABASE_URL && SUPABASE_SERVICE_KEY && SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_SERVICE_KEY !== 'YOUR_SERVICE_ROLE_KEY') {
+  supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+  console.log('✅ Supabase client initialized for leaderboard');
+} else {
+  console.warn('⚠️ Supabase not configured. Leaderboard will use in-memory storage only.');
+}
 
 module.exports = {
+  supabase,
   SUPABASE_URL,
   SUPABASE_SERVICE_KEY
 };

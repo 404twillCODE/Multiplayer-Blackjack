@@ -3,6 +3,7 @@ const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
+const { supabase } = require('./supabase');
 
 const app = express();
 app.use(cors());
@@ -95,6 +96,21 @@ io.on('connection', (socket) => {
   socket.on('ping', (data) => {
     console.log(`Ping received from ${socket.id}:`, data);
     socket.emit('pong', { message: 'Server is alive', timestamp: Date.now() });
+  });
+  
+  // Get leaderboard
+  socket.on('get_leaderboard', async () => {
+    try {
+      const leaderboardData = await fetchLeaderboardFromSupabase(10);
+      socket.emit('leaderboard_updated', {
+        leaderboard: leaderboardData
+      });
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+      socket.emit('leaderboard_updated', {
+        leaderboard: leaderboard.slice(0, 10)
+      });
+    }
   });
   
   // Vote to continue after all players lose
@@ -1945,7 +1961,8 @@ function settleGame(roomId) {
 }
 
 // Update leaderboard with player info
-function updateLeaderboard(player) {
+async function updateLeaderboard(player) {
+  // Update in-memory leaderboard for immediate access
   const existingIndex = leaderboard.findIndex(p => p.id === player.id);
   
   if (existingIndex !== -1) {
@@ -1964,6 +1981,69 @@ function updateLeaderboard(player) {
   
   // Sort leaderboard by balance
   leaderboard.sort((a, b) => b.balance - a.balance);
+  
+  // Update Supabase leaderboard if configured
+  if (supabase) {
+    try {
+      // Use username as identifier (since we don't have user_id in game state)
+      // If player has user_id, we should use that instead
+      const userId = player.userId || null; // userId would come from client if available
+      
+      // Call the Supabase function to update leaderboard
+      const { error } = await supabase.rpc('update_leaderboard', {
+        p_user_id: userId,
+        p_username: player.username,
+        p_balance: player.balance
+      });
+      
+      if (error) {
+        console.error('Error updating leaderboard in Supabase:', error);
+      }
+    } catch (error) {
+      console.error('Error updating leaderboard:', error);
+    }
+  }
+  
+  // Emit updated leaderboard to all clients
+  io.emit('leaderboard_updated', {
+    leaderboard: leaderboard.slice(0, 10) // Top 10
+  });
+}
+
+// Fetch leaderboard from Supabase
+async function fetchLeaderboardFromSupabase(limit = 10) {
+  if (!supabase) {
+    // Return in-memory leaderboard if Supabase not configured
+    return leaderboard.slice(0, limit);
+  }
+  
+  try {
+    const { data, error } = await supabase.rpc('get_leaderboard', {
+      limit_count: limit
+    });
+    
+    if (error) {
+      console.error('Error fetching leaderboard from Supabase:', error);
+      return leaderboard.slice(0, limit);
+    }
+    
+    // Update in-memory leaderboard with Supabase data
+    if (data && data.length > 0) {
+      leaderboard.length = 0; // Clear existing
+      data.forEach(entry => {
+        leaderboard.push({
+          id: entry.user_id || `user_${entry.username}`, // Use user_id if available, otherwise generate id
+          username: entry.username,
+          balance: entry.balance
+        });
+      });
+    }
+    
+    return leaderboard.slice(0, limit);
+  } catch (error) {
+    console.error('Error fetching leaderboard:', error);
+    return leaderboard.slice(0, limit);
+  }
 }
 
 // Default route
@@ -1971,10 +2051,36 @@ app.get('/', (req, res) => {
   res.send('Blackjack Multiplayer Server is running');
 });
 
+// Get leaderboard endpoint
+app.get('/leaderboard', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const leaderboardData = await fetchLeaderboardFromSupabase(limit);
+    res.json({ leaderboard: leaderboardData });
+  } catch (error) {
+    console.error('Error fetching leaderboard:', error);
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+
 // Health check endpoint for Render
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: Date.now() });
 });
+
+// Load leaderboard from Supabase on server start
+async function initializeLeaderboard() {
+  try {
+    await fetchLeaderboardFromSupabase(10);
+    console.log('✅ Leaderboard initialized from Supabase');
+  } catch (error) {
+    console.error('⚠️ Error initializing leaderboard:', error);
+    console.log('📊 Using in-memory leaderboard only');
+  }
+}
+
+// Initialize leaderboard when server starts
+initializeLeaderboard();
 
 // Error handling for uncaught exceptions
 process.on('uncaughtException', (error) => {
