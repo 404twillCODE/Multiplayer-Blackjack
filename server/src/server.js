@@ -1337,8 +1337,8 @@ function dealInitialCards(roomId) {
     
     // If dealer has blackjack, end the game immediately
     if (dealerHasBlackjack) {
-      setTimeout(() => {
-        settleGame(roomId);
+      setTimeout(async () => {
+        await settleGame(roomId);
       }, 1000); // Small delay to show the dealer's blackjack
       return; // Don't continue with player turns
     }
@@ -1668,7 +1668,7 @@ function dealerTurn(roomId) {
   
   // Dealer draws cards until score is 17 or higher
   // Use a recursive function to handle sequential card dealing with delays
-  const dealDealerCard = (delay = 600) => {
+  const dealDealerCard = async (delay = 600) => {
     // Check if room still exists and game hasn't ended
     if (!rooms[roomId] || rooms[roomId].gameState === 'ended') {
       return; // Stop if room doesn't exist or game has ended
@@ -1686,7 +1686,7 @@ function dealerTurn(roomId) {
       }
       
       // Determine winners and settle bets
-      settleGame(roomId);
+      settleGame(roomId).catch(err => console.error('Error settling game:', err));
       return;
     }
     
@@ -1772,7 +1772,7 @@ function resetGameAfterVote(roomId) {
 }
 
 // Determine winners and settle bets
-function settleGame(roomId) {
+async function settleGame(roomId) {
   if (!rooms[roomId]) return;
   
   const room = rooms[roomId];
@@ -1861,8 +1861,8 @@ function settleGame(roomId) {
       score: playerScore
     });
     
-    // Update leaderboard
-    updateLeaderboard(player);
+    // Update leaderboard with current player balance and username
+    await updateLeaderboard(player);
     
     // Mark players with zero balance as spectators for the next round
     // BUT: Don't mark them if they have a bet (all-in scenario - they're still in the current round)
@@ -1962,13 +1962,23 @@ function settleGame(roomId) {
 
 // Update leaderboard with player info
 async function updateLeaderboard(player) {
+  // Validate player data
+  if (!player || !player.username || player.balance === undefined) {
+    console.error('Invalid player data for leaderboard:', player);
+    return;
+  }
+  
+  console.log(`[Leaderboard] Updating for player: ${player.username}, balance: ${player.balance}`);
+  
   // Update in-memory leaderboard for immediate access
-  const existingIndex = leaderboard.findIndex(p => p.id === player.id);
+  const existingIndex = leaderboard.findIndex(p => p.id === player.id || p.username === player.username);
   
   if (existingIndex !== -1) {
-    // Update existing player only if new balance is higher
+    // Update existing player - always update to keep current balance
+    // But only store the highest balance they've achieved
     if (player.balance > leaderboard[existingIndex].balance) {
       leaderboard[existingIndex].balance = player.balance;
+      leaderboard[existingIndex].username = player.username; // Update username in case it changed
     }
   } else {
     // Add new player
@@ -1989,19 +1999,26 @@ async function updateLeaderboard(player) {
       // If player has user_id, we should use that instead
       const userId = player.userId || null; // userId would come from client if available
       
+      console.log(`[Leaderboard] Updating Supabase: username=${player.username}, balance=${player.balance}, userId=${userId || 'null'}`);
+      
       // Call the Supabase function to update leaderboard
-      const { error } = await supabase.rpc('update_leaderboard', {
+      const { data, error } = await supabase.rpc('update_leaderboard', {
         p_user_id: userId,
         p_username: player.username,
         p_balance: player.balance
       });
       
       if (error) {
-        console.error('Error updating leaderboard in Supabase:', error);
+        console.error('❌ Error updating leaderboard in Supabase:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+      } else {
+        console.log(`✅ Successfully updated leaderboard in Supabase for ${player.username}`);
       }
     } catch (error) {
-      console.error('Error updating leaderboard:', error);
+      console.error('❌ Exception updating leaderboard:', error);
     }
+  } else {
+    console.warn('⚠️ Supabase not configured, leaderboard only stored in memory');
   }
   
   // Emit updated leaderboard to all clients
