@@ -415,6 +415,31 @@ io.on('connection', (socket) => {
     if (playerIndex === -1) return;
     
     const player = rooms[roomId].players[playerIndex];
+    
+    // Recalculate score from cards to catch any race conditions (e.g., hit then stand quickly)
+    player.score = calculateHandValue(player.cards);
+    
+    // Check if player busted - if so, they can't stand, they're already busted
+    if (player.score > 21) {
+      player.status = 'busted';
+      rooms[roomId].players[playerIndex] = player;
+      
+      // Emit updated player state
+      io.to(roomId).emit('card_dealt', {
+        to: targetHandId,
+        cards: [...player.cards],
+        score: player.score,
+        isNewCard: false
+      });
+      
+      // Move to next player's turn after a short delay
+      setTimeout(() => {
+        nextPlayerTurn(roomId);
+      }, 500);
+      return;
+    }
+    
+    // Player is not busted, they can stand
     player.status = 'stood';
     
     // Update player in room
