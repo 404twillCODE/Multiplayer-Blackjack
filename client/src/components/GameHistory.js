@@ -153,6 +153,34 @@ const EmptyState = styled.div`
   font-style: italic;
 `;
 
+const AllLostMessage = styled.div`
+  padding: 20px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(244, 67, 54, 0.2) 0%, rgba(183, 28, 28, 0.2) 100%);
+  border: 2px solid rgba(244, 67, 54, 0.5);
+  border-radius: 12px;
+  margin: 10px 0;
+`;
+
+const AllLostIcon = styled.div`
+  font-size: 48px;
+  margin-bottom: 10px;
+`;
+
+const AllLostText = styled.div`
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #f44336;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 5px;
+`;
+
+const AllLostSubtext = styled.div`
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.8);
+`;
+
 const formatTime = (timestamp) => {
   const date = new Date(timestamp);
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -170,6 +198,8 @@ const getResultLabel = (result) => {
       return 'BLACKJACK';
     case 'bust':
       return 'BUST';
+    case 'all_lost':
+      return 'ALL LOST';
     default:
       return '';
   }
@@ -193,36 +223,44 @@ const GameHistory = () => {
                 <TimeStamp>{formatTime(round.timestamp || Date.now())}</TimeStamp>
               </RoundHeader>
               
-              <ResultGrid>
-                {round.results && round.results
-                  .filter(result => {
-                    // Filter out spectating players
-                    // Players are spectating if:
-                    // 1. They have outcome 'spectating'
-                    // 2. They have amountChange === 0 and no meaningful outcome (no bet placed)
-                    if (result.outcome === 'spectating') {
-                      return false;
-                    }
-                    if (result.amountChange === 0 && (!result.outcome || result.outcome === '')) {
-                      return false; // No bet, no outcome = spectating
-                    }
-                    return true;
-                  })
-                  .map((result, playerIndex) => (
-                    <PlayerResult 
-                      key={playerIndex} 
-                      result={result.outcome}
-                    >
-                      <Username>{result.username}</Username>
-                      <ResultLabel result={result.outcome}>
-                        {getResultLabel(result.outcome)}
-                      </ResultLabel>
-                      <AmountChange amount={result.amountChange}>
-                        {result.amountChange > 0 ? '+' : ''}{result.amountChange}
-                      </AmountChange>
-                    </PlayerResult>
-                  ))}
-              </ResultGrid>
+              {round.allPlayersLost ? (
+                <AllLostMessage>
+                  <AllLostIcon>💸</AllLostIcon>
+                  <AllLostText>All Players Lost</AllLostText>
+                  <AllLostSubtext>Everyone ran out of money!</AllLostSubtext>
+                </AllLostMessage>
+              ) : (
+                <ResultGrid>
+                  {round.results && round.results
+                    .filter(result => {
+                      // Filter out spectating players
+                      // Players are spectating if:
+                      // 1. They have outcome 'spectating'
+                      // 2. They have amountChange === 0 and no meaningful outcome (no bet placed)
+                      if (result.outcome === 'spectating') {
+                        return false;
+                      }
+                      if (result.amountChange === 0 && (!result.outcome || result.outcome === '')) {
+                        return false; // No bet, no outcome = spectating
+                      }
+                      return true;
+                    })
+                    .map((result, playerIndex) => (
+                      <PlayerResult 
+                        key={playerIndex} 
+                        result={result.outcome}
+                      >
+                        <Username>{result.username}</Username>
+                        <ResultLabel result={result.outcome}>
+                          {getResultLabel(result.outcome)}
+                        </ResultLabel>
+                        <AmountChange amount={result.amountChange}>
+                          {result.amountChange > 0 ? '+' : ''}{result.amountChange}
+                        </AmountChange>
+                      </PlayerResult>
+                    ))}
+                </ResultGrid>
+              )}
             </HistoryItem>
           ))
         ) : (

@@ -25,6 +25,9 @@ export const GameProvider = ({ children }) => {
   const [hintsEnabled, setHintsEnabled] = useState(true);
   const [autoSkipNewRound, setAutoSkipNewRound] = useState(true);
   const [isPickingUpCards, setIsPickingUpCards] = useState(false);
+  const [showVotePrompt, setShowVotePrompt] = useState(false);
+  const [voteStatus, setVoteStatus] = useState(null);
+  const [hasVoted, setHasVoted] = useState(false);
   const navigate = useNavigate();
 
   // Helper function to add messages to the chat
@@ -49,13 +52,11 @@ export const GameProvider = ({ children }) => {
       return;
     }
     
-    console.log(`Emitting new_round event for room ${roomId}`);
     socket.emit('new_round', { roomId });
   }, [connected, roomId, socket]);
 
   // Connect to socket server
   useEffect(() => {
-    console.log('🔌 [GameContext] Connecting to server:', SOCKET_SERVER);
     const newSocket = io(SOCKET_SERVER, {
       transports: ['polling', 'websocket'], // Try polling first, then websocket
       reconnection: true,
@@ -70,98 +71,48 @@ export const GameProvider = ({ children }) => {
     // Set socket immediately so it's available even if not connected yet
     setSocket(newSocket);
     
-    // Log all connection-related events
     newSocket.io.on('error', (error) => {
-      console.error('❌ [GameContext] IO error:', error);
-    });
-    
-    newSocket.io.on('reconnect_attempt', () => {
-      console.log('🔄 [GameContext] IO reconnection attempt');
-    });
-    
-    newSocket.io.on('reconnect', () => {
-      console.log('✅ [GameContext] IO reconnected');
+      console.error('Connection error:', error);
     });
     
     newSocket.io.on('reconnect_failed', () => {
-      console.error('❌ [GameContext] IO reconnection failed');
+      console.error('Reconnection failed');
     });
     
     newSocket.on('connect', () => {
       setConnected(true);
-      console.log('✅ [GameContext] Connected to server:', SOCKET_SERVER, 'Socket ID:', newSocket.id);
       setError(null); // Clear any previous errors
     });
     
     newSocket.on('connect_error', (error) => {
-      console.error('❌ [GameContext] Connection error:', error);
-      console.error('❌ [GameContext] Error details:', {
-        message: error.message,
-        type: error.type,
-        description: error.description,
-        context: error.context,
-        errno: error.errno,
-        code: error.code
-      });
       setConnected(false);
       const errorMsg = error.message || 'Connection refused';
       setError(`Failed to connect to server: ${errorMsg}. The server may be sleeping. Try visiting https://multiplayer-blackjack-7df9.onrender.com to wake it up, then refresh this page.`);
     });
     
-    newSocket.on('reconnect_attempt', (attemptNumber) => {
-      console.log(`🔄 [GameContext] Reconnection attempt ${attemptNumber}`);
-    });
-    
-    newSocket.on('reconnect', (attemptNumber) => {
-      console.log(`✅ [GameContext] Reconnected after ${attemptNumber} attempts`);
+    newSocket.on('reconnect', () => {
       setConnected(true);
       setError(null);
     });
     
-    newSocket.on('reconnect_error', (error) => {
-      console.error('❌ [GameContext] Reconnection error:', error);
-    });
-    
     newSocket.on('reconnect_failed', () => {
-      console.error('❌ [GameContext] Reconnection failed after all attempts');
       setError('Unable to connect to server. Please check if the server is running and refresh the page.');
     });
     
     newSocket.on('disconnect', (reason) => {
       setConnected(false);
-      console.log('⚠️ [GameContext] Disconnected from server. Reason:', reason);
       if (reason === 'io server disconnect') {
         setError('Disconnected by server. Please refresh the page.');
       }
     });
     
     newSocket.on('error', (data) => {
-      console.error('❌ [GameContext] Socket error event:', data);
+      console.error('Socket error:', data);
       setError(data.message || 'An error occurred');
       setTimeout(() => setError(null), 5000);
     });
     
-    // Listen for all socket events for debugging
-    newSocket.onAny((eventName, ...args) => {
-      if (eventName === 'kick_player' || eventName === 'error' || eventName.includes('kick') || eventName.includes('connect')) {
-        console.log('🔍 [GameContext] Socket event received:', eventName, args);
-      }
-    });
-    
-    // Check connection status after a short delay
-    setTimeout(() => {
-      console.log('🔍 [GameContext] Connection status check:', {
-        connected: newSocket.connected,
-        disconnected: newSocket.disconnected,
-        id: newSocket.id
-      });
-      if (!newSocket.connected) {
-        console.warn('⚠️ [GameContext] Socket not connected after initialization');
-      }
-    }, 2000);
-    
     return () => {
-      console.log('🧹 [GameContext] Cleaning up socket connection');
       newSocket.disconnect();
     };
   }, []);
@@ -296,21 +247,8 @@ export const GameProvider = ({ children }) => {
     
     socket.on('player_bet_placed', (data) => {
       if (!data) return;
-      console.log('💰 [player_bet_placed] Received bet update:', {
-        playerId: data.playerId,
-        username: data.username,
-        bet: data.bet,
-        playersCount: data.players?.length,
-        allPlayers: data.players?.map(p => ({ username: p.username, bet: p.bet, balance: p.balance }))
-      });
-      
       // Update players array with the new bet information
       if (data.players && Array.isArray(data.players)) {
-        console.log('💰 [player_bet_placed] Setting players array to:', data.players.map(p => ({
-          username: p.username,
-          bet: p.bet,
-          balance: p.balance
-        })));
         setPlayers([...data.players]); // Create new array to ensure React detects change
       }
       
@@ -352,7 +290,6 @@ export const GameProvider = ({ children }) => {
       
       // Prevent duplicate messages
       if (lastAutoSkipKey === skipKey) {
-        console.log('[Client] Duplicate auto-skip message ignored');
         return;
       }
       
@@ -374,7 +311,6 @@ export const GameProvider = ({ children }) => {
     
     socket.on('card_dealt', (data) => {
       if (!data) return;
-      console.log(`[Client] Received card_dealt event at ${Date.now()}`, data);
       if (data.to === 'dealer') {
         setDealer(data.dealer || { cards: [], score: 0 });
       } else if (data.to && data.cards) {
@@ -403,30 +339,22 @@ export const GameProvider = ({ children }) => {
     });
     
     socket.on('game_reset', (data) => {
-      console.log('🎮🎮🎮 GAME_RESET EVENT RECEIVED 🎮🎮🎮');
-      console.log('Game reset data:', data);
+      if (!data) return;
       
-      if (!data) {
-        console.error('❌ No data in game_reset event');
-        return;
-      }
+      // Hide vote prompt when game resets
+      setShowVotePrompt(false);
+      setVoteStatus(null);
+      setHasVoted(false);
       
-      console.log('Setting game state to waiting...');
       setGameState('waiting');
       setDealer({ cards: [], score: 0 });
       setCurrentTurn(null);
-      
-      console.log('Updating players:', data.players);
       setPlayers(data.players || []);
       
       // Update balance for current player
       const currentPlayer = data.players?.find(p => p.id === socket.id);
-      console.log('Current player in reset data:', currentPlayer);
       if (currentPlayer) {
-        console.log(`Updating balance: ${currentPlayer.balance}`);
         setBalance(currentPlayer.balance);
-      } else {
-        console.warn('⚠️ Current player not found in reset data');
       }
       
       // Add system message
@@ -435,8 +363,6 @@ export const GameProvider = ({ children }) => {
         type: 'system',
         timestamp: Date.now()
       });
-      
-      console.log('✅ Game reset complete!');
     });
     
     socket.on('game_ended', (data) => {
@@ -463,13 +389,16 @@ export const GameProvider = ({ children }) => {
           dealer: finalData.dealer,
           players: finalData.players,
           results: finalData.result?.results || [],
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          allPlayersLost: finalData.allPlayersLost || false
         };
         setGameHistory(prev => [historyEntry, ...prev].slice(0, 10));
         
         // Add system message
         let resultMessage = 'Round ended. Check your results!';
-        if (finalData.result && finalData.result.results) {
+        if (finalData.allPlayersLost) {
+          resultMessage = 'All players ran out of money!';
+        } else if (finalData.result && finalData.result.results) {
           const resultSummary = finalData.result.results
             .map(r => `${r.username}: ${r.outcome} (${r.amountChange >= 0 ? '+' : ''}${r.amountChange})`)
             .join(', ');
@@ -482,9 +411,14 @@ export const GameProvider = ({ children }) => {
           timestamp: Date.now()
         });
         
+        // If all players lost, don't auto-start new round (wait for vote)
+        if (finalData.allPlayersLost) {
+          // Vote prompt will be shown via vote_to_continue event
+          return;
+        }
+        
         // If host has auto-next round enabled, automatically start a new round after animation
         if (autoSkipNewRound && socket.id === players[0]?.id) {
-          console.log("Auto next round enabled, starting new round after animation");
           setTimeout(() => {
             startNewRound();
           }, 500);
@@ -492,12 +426,25 @@ export const GameProvider = ({ children }) => {
       }, 2000); // Wait 2 seconds for all cards to animate
     });
     
+    socket.on('vote_to_continue', (data) => {
+      if (!data) return;
+      setShowVotePrompt(true);
+      setHasVoted(false);
+      setVoteStatus(null);
+      addMessage({
+        content: data.message || 'All players ran out of money! Vote to continue or reset.',
+        type: 'system',
+        timestamp: Date.now()
+      });
+    });
+    
+    socket.on('vote_status', (data) => {
+      if (!data) return;
+      setVoteStatus(data);
+    });
+    
     socket.on('new_round', (data) => {
       if (!data) return;
-      console.log('🔄 [new_round] Received new round event:', {
-        playersCount: data.players?.length,
-        players: data.players?.map(p => ({ username: p.username, bet: p.bet, balance: p.balance }))
-      });
       
       setGameState('betting');
       // Update players array - bets should be 0 at start of new round
@@ -554,7 +501,6 @@ export const GameProvider = ({ children }) => {
         timestamp: Date.now()
       });
       
-      console.log(`Player ${data.username} is now spectating`);
     });
     
     return () => {
@@ -574,28 +520,25 @@ export const GameProvider = ({ children }) => {
       socket.off('player_split');
       socket.off('player_spectating');
       socket.off('player_auto_skipped');
+      socket.off('vote_to_continue');
+      socket.off('vote_status');
     };
   }, [socket, autoSkipNewRound, players, startNewRound]);
   
   // Game actions
   const createRoom = (username, initialBalance = 1000) => {
-    console.log('🔵 [createRoom] Attempting to create room:', { username, connected, socket: socket?.id, socketConnected: socket?.connected });
-    
     if (!connected || !socket) {
-      console.error('❌ [createRoom] Cannot create room: not connected or socket not initialized', { connected, socket: !!socket });
       setError('Not connected to server. Please wait a moment and try again.');
       return;
     }
     
     if (!socket.connected) {
-      console.error('❌ [createRoom] Socket not connected:', { socketId: socket.id, connected: socket.connected });
       setError('Connection lost. Please refresh the page.');
       return;
     }
     
     setUsername(username);
     setBalance(initialBalance);
-    console.log('✅ [createRoom] Emitting create_room event');
     socket.emit('create_room', { username, balance: initialBalance });
   };
   
@@ -616,19 +559,14 @@ export const GameProvider = ({ children }) => {
   const placeBet = (amount) => {
     if (!connected || !roomId) return;
     
-    console.log('💰 [placeBet] Placing bet:', { amount, roomId, socketId: socket.id });
-    
     // Optimistically update the local player's bet immediately
     setPlayers(prevPlayers => {
-      const updated = prevPlayers.map(p => {
+      return prevPlayers.map(p => {
         if (p.id === socket.id) {
-          console.log('💰 [placeBet] Updating local player bet:', { username: p.username, oldBet: p.bet, newBet: amount });
           return { ...p, bet: amount, balance: p.balance - amount };
         }
         return p;
       });
-      console.log('💰 [placeBet] Updated players array:', updated.map(p => ({ username: p.username, bet: p.bet })));
-      return updated;
     });
     
     socket.emit('place_bet', { roomId, amount });
@@ -729,97 +667,39 @@ export const GameProvider = ({ children }) => {
       return;
     }
     
-    console.log('=== KICK ATTEMPT ===');
-    console.log('RoomId:', roomId);
-    console.log('PlayerId to kick:', playerId);
-    console.log('Socket ID:', socket.id);
-    console.log('Socket connected?', socket.connected);
-    console.log('Socket active?', socket.active);
-    
-    // Verify socket is connected before emitting
     if (!socket.connected) {
-      console.error('❌ Socket is not connected!');
       return;
     }
     
-    // Test if socket can emit at all
-    console.log('Testing socket connection...');
-    socket.emit('ping', { test: 'connection' });
-    
-    // Emit the kick event
-    console.log('Emitting kick_player event...');
-    const eventData = { roomId, playerId };
-    console.log('Event data:', eventData);
-    
-    socket.emit('kick_player', eventData);
-    
-    console.log('Event emitted, waiting for response...');
-    
-    // Listen for error response
-    const errorTimeout = setTimeout(() => {
-      console.warn('⚠️ No response from server after 2 seconds');
-    }, 2000);
-    
-    socket.once('error', (error) => {
-      clearTimeout(errorTimeout);
-      console.error('❌ Socket error during kick:', error);
-    });
-    
-    socket.once('player_kicked', (data) => {
-      clearTimeout(errorTimeout);
-      console.log('✅ Kick successful:', data);
-    });
+    socket.emit('kick_player', { roomId, playerId });
   };
 
   // Restart game - reset all players' balances to 1000
   const restartGame = () => {
-    console.log('=== RESTART GAME CALLED ===');
-    console.log('Connected:', connected);
-    console.log('RoomId:', roomId);
-    console.log('Socket:', socket?.id);
-    console.log('Socket connected?', socket?.connected);
-    
     if (!connected || !roomId) {
-      console.error('Cannot restart game: not connected or no roomId', { connected, roomId });
       alert('Error: Not connected or no room ID. Please refresh the page.');
       return;
     }
     
     if (!socket) {
-      console.error('Cannot restart game: socket not available');
       alert('Error: Socket not available. Please refresh the page.');
       return;
     }
     
     if (!socket.connected) {
-      console.error('Socket is not connected!');
       alert('Error: Not connected to server. Please refresh the page.');
       return;
     }
     
-    console.log('✅ Emitting restart_game event for room:', roomId);
-    console.log('Event payload:', { roomId });
+    socket.emit('restart_game', { roomId });
     
-    // Emit the restart event
-    socket.emit('restart_game', { roomId }, (response) => {
-      // Callback for acknowledgment (if server supports it)
-      console.log('Server response:', response);
-    });
-    
-    // Listen for error response
     socket.once('error', (error) => {
-      console.error('❌ Error restarting game:', error);
       if (error && error.message) {
         alert(`Error: ${error.message}`);
       } else if (error) {
         alert(`Error: ${JSON.stringify(error)}`);
       }
     });
-    
-    // Also listen for any response after a short delay
-    setTimeout(() => {
-      console.log('Checking if game_reset was received...');
-    }, 1000);
   };
   
   // Check if it's current player's turn
@@ -899,7 +779,15 @@ export const GameProvider = ({ children }) => {
         toggleHints,
         setAutoSkipNewRound,
         socket,
-        isPickingUpCards
+        isPickingUpCards,
+        showVotePrompt,
+        voteStatus,
+        hasVoted,
+        voteReset: (vote) => {
+          if (!socket || !roomId) return;
+          socket.emit('vote_reset', { roomId, vote });
+          setHasVoted(true);
+        }
       }}
     >
       {children}

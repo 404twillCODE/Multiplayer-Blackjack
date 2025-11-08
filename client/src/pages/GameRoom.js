@@ -424,31 +424,99 @@ const BettingStatusBadge = styled.span`
   }
 `;
 
+const VotePromptContainer = styled.div`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.98) 0%, rgba(0, 0, 0, 0.98) 100%);
+  border: 3px solid #d4af37;
+  border-radius: 20px;
+  padding: 40px;
+  z-index: 300;
+  text-align: center;
+  min-width: 400px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(212, 175, 55, 0.4);
+  backdrop-filter: blur(10px);
+`;
+
+const VoteTitle = styled.h2`
+  color: #d4af37;
+  font-size: 28px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 15px;
+  text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+`;
+
+const VoteMessage = styled.p`
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  margin-bottom: 30px;
+  line-height: 1.5;
+`;
+
+const VoteButtons = styled.div`
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin-bottom: 20px;
+`;
+
+const VoteButton = styled.button`
+  padding: 15px 30px;
+  border-radius: 12px;
+  border: 2px solid ${props => props.$voteType === 'continue' ? '#4caf50' : '#f44336'};
+  background: ${props => props.$voteType === 'continue' 
+    ? 'linear-gradient(135deg, #4caf50 0%, #43a047 100%)' 
+    : 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)'};
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  ${props => props.$selected ? `
+    border-color: #d4af37;
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.6);
+  ` : ''}
+`;
+
+const VoteStatus = styled.div`
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 8px;
+  color: #d4af37;
+  font-size: 14px;
+  font-weight: 600;
+`;
+
 const GameRoom = () => {
   const navigate = useNavigate();
   const { 
     connected, roomId, players, dealer, gameState, error,
     startGame, leaveRoom, getCurrentPlayer, isPlayerTurn, currentTurn,
     hintsEnabled, toggleHints, autoSkipNewRound, setAutoSkipNewRound,
-    startNewRound, kickPlayer, socket, isPickingUpCards
+    startNewRound, kickPlayer, socket, isPickingUpCards,
+    showVotePrompt, voteStatus, hasVoted, voteReset
   } = useGame();
   
-  // Debug: Log when players array changes
-  useEffect(() => {
-    if (gameState === 'betting') {
-      console.log('🔄 [GameRoom] Players array updated:', players.map(p => ({
-        username: p.username,
-        bet: p.bet,
-        balance: p.balance,
-        status: p.status,
-        id: p.id
-      })));
-      console.log('🔄 [GameRoom] Players with bets:', players.filter(p => p.bet > 0).map(p => ({
-        username: p.username,
-        bet: p.bet
-      })));
-    }
-  }, [players, gameState]);
   
   // Redirect if not connected or no room joined
   useEffect(() => {
@@ -470,10 +538,6 @@ const GameRoom = () => {
   // Use socket.id directly from context to ensure accurate comparison
   const isHost = players.length > 0 && socket?.id === players[0]?.id;
   
-  // Debug log for host status
-  if (isHost) {
-    console.log(`Host status: balance=${currentPlayer?.balance}, status=${currentPlayer?.status}, spectating=${currentPlayer?.status === 'spectating' || (gameState === 'betting' && currentPlayer?.balance <= 0)}`);
-  }
   
   // Handler for auto-skip toggle
   const handleAutoSkipToggle = () => {
@@ -502,26 +566,6 @@ const GameRoom = () => {
     const playersWithBets = activePlayers.filter(p => p.bet > 0);
     const playersWithoutBets = activePlayers.filter(p => p.bet === 0 || !p.bet);
     
-    // Debug logging
-    console.log('📊 [getBettingStatus] Current status:', {
-      total: activePlayers.length,
-      withBets: playersWithBets.length,
-      withoutBets: playersWithoutBets.length,
-      players: activePlayers.map(p => ({
-        username: p.username,
-        bet: p.bet,
-        hasBet: p.bet > 0,
-        balance: p.balance,
-        status: p.status
-      })),
-      allPlayersRaw: players.map(p => ({
-        username: p.username,
-        bet: p.bet,
-        balance: p.balance,
-        status: p.status,
-        id: p.id
-      }))
-    });
     
     return {
       total: activePlayers.length,
@@ -546,8 +590,6 @@ const GameRoom = () => {
       return player.status !== 'spectating';
     });
     
-    console.log('Active players:', activePlayers.map(p => `${p.username} (status: ${p.status}, balance: ${p.balance}, isHost: ${p.id === players[0]?.id})`));
-    console.log('Spectators:', getSpectators().map(p => `${p.username} (isHost: ${p.id === players[0]?.id})`));
     
     return activePlayers.map((player, index) => {
       // Check if this is the current player or a split hand of the current player
@@ -594,9 +636,6 @@ const GameRoom = () => {
       return false;
     });
     
-    // Debug log for spectators
-    console.log('Spectators list:', spectators.map(p => `${p.username} (isHost: ${p.id === players[0]?.id}, balance: ${p.balance}, status: ${p.status})`));
-    
     return spectators;
   };
   
@@ -632,7 +671,6 @@ const GameRoom = () => {
       
       const handleBetComplete = () => {
         // This is a placeholder function that will be called when a bet is placed
-        console.log('Bet placed successfully');
       };
       
       return <BettingPanel 
@@ -706,6 +744,40 @@ const GameRoom = () => {
               <h2>🎴 Round Ended</h2>
               <p>Dealer is collecting cards...</p>
             </RoundEndedMessage>
+          )}
+          
+          {/* Vote to Continue Prompt */}
+          {showVotePrompt && (
+            <VotePromptContainer>
+              <VoteTitle>💸 All Players Lost!</VoteTitle>
+              <VoteMessage>
+                Everyone ran out of money! Vote to continue playing or reset the game.
+              </VoteMessage>
+              <VoteButtons>
+                <VoteButton
+                  $voteType="continue"
+                  $selected={hasVoted && voteStatus?.votes?.[socket?.id] === 'continue'}
+                  onClick={() => voteReset('continue')}
+                  disabled={hasVoted}
+                >
+                  ✅ Continue
+                </VoteButton>
+                <VoteButton
+                  $voteType="reset"
+                  $selected={hasVoted && voteStatus?.votes?.[socket?.id] === 'reset'}
+                  onClick={() => voteReset('reset')}
+                  disabled={hasVoted}
+                >
+                  🔄 Reset
+                </VoteButton>
+              </VoteButtons>
+              {voteStatus && (
+                <VoteStatus>
+                  Votes: {voteStatus.votesReceived}/{voteStatus.totalPlayers} 
+                  ({voteStatus.continueVotes} Continue, {voteStatus.resetVotes} Reset)
+                </VoteStatus>
+              )}
+            </VotePromptContainer>
           )}
           
           <ControlsSection>

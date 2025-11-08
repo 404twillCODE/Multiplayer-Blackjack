@@ -22,6 +22,7 @@ const rooms = {};
 const leaderboard = [];
 const turnTimers = {}; // Store timers for auto-skipping players after 30 seconds
 const autoSkippedPlayers = {}; // Track which players have been auto-skipped to prevent duplicate messages
+const resetVotes = {}; // Track votes for game reset: { roomId: { playerId: 'continue' | 'reset' } }
 
 // Card deck utilities
 const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
@@ -93,6 +94,47 @@ io.on('connection', (socket) => {
   socket.on('ping', (data) => {
     console.log(`Ping received from ${socket.id}:`, data);
     socket.emit('pong', { message: 'Server is alive', timestamp: Date.now() });
+  });
+  
+  // Vote to continue or reset after all players lose
+  socket.on('vote_reset', ({ roomId, vote }) => {
+    if (!rooms[roomId] || !rooms[roomId].players.find(p => p.id === socket.id)) {
+      socket.emit('error', { message: 'Room not found or you are not in this room' });
+      return;
+    }
+    
+    // Initialize votes for this room if needed
+    if (!resetVotes[roomId]) {
+      resetVotes[roomId] = {};
+    }
+    
+    // Record the vote
+    resetVotes[roomId][socket.id] = vote; // 'continue' or 'reset'
+    
+    const room = rooms[roomId];
+    const activePlayers = room.players.filter(p => !p.originalPlayer);
+    const votes = resetVotes[roomId];
+    const voteCount = Object.keys(votes).length;
+    const continueVotes = Object.values(votes).filter(v => v === 'continue').length;
+    const resetVotesCount = Object.values(votes).filter(v => v === 'reset').length;
+    
+    console.log(`[Vote] Player ${socket.id} voted ${vote} in room ${roomId}. Votes: ${voteCount}/${activePlayers.length}`);
+    
+    // Notify all players of current vote status
+    io.to(roomId).emit('vote_status', {
+      votes: votes,
+      totalPlayers: activePlayers.length,
+      votesReceived: voteCount,
+      continueVotes: continueVotes,
+      resetVotes: resetVotesCount
+    });
+    
+    // Check if all players have voted
+    if (voteCount >= activePlayers.length) {
+      // All players have voted - reset the game (both continue and reset do the same thing)
+      console.log(`[Vote] All players voted. Resetting game in room ${roomId}`);
+      resetGameAfterVote(roomId);
+    }
   });
   
   // Log all events for debugging
@@ -1443,6 +1485,53 @@ function dealerTurn(roomId) {
   dealDealerCard(600);
 }
 
+// Reset game after vote
+function resetGameAfterVote(roomId) {
+  if (!rooms[roomId]) return;
+  
+  const room = rooms[roomId];
+  const startingBalance = 1000;
+  
+  // Reset all players' balances and status
+  for (const player of room.players) {
+    // Skip split hands
+    if (player.originalPlayer) continue;
+    
+    player.balance = startingBalance;
+    player.status = null;
+    player.cards = [];
+    player.bet = 0;
+    player.score = 0;
+  }
+  
+  // Reset dealer
+  room.dealer = {
+    cards: [],
+    score: 0,
+    status: null
+  };
+  
+  // Reset game state to waiting
+  room.gameState = 'waiting';
+  room.currentTurn = null;
+  room.deck = [];
+  
+  // Clear any turn timers
+  clearTurnTimer(roomId);
+  
+  // Clear votes
+  delete resetVotes[roomId];
+  
+  // Notify all players that the game has been reset
+  io.to(roomId).emit('game_reset', {
+    message: 'Game has been reset. Everyone starts with $1000 again.',
+    players: room.players,
+    gameState: 'waiting'
+  });
+  
+  console.log(`Game reset in room ${roomId}. All players now have $${startingBalance}`);
+}
+
 // Determine winners and settle bets
 function settleGame(roomId) {
   if (!rooms[roomId]) return;
@@ -1553,48 +1642,48 @@ function settleGame(roomId) {
   
   console.log(`  ✅ [settleGame] All players spectating: ${allPlayersSpectating}`);
   
-  // If everyone is spectating, reset the game (give everyone starting balance back)
+  // If everyone is spectating, show results in history and start voting for reset
   if (allPlayersSpectating && activePlayers.length > 0) {
-    console.log(`\n🎮 [settleGame] RESETTING GAME - All players in room ${roomId} are spectating!`);
+    console.log(`\n🎮 [settleGame] All players in room ${roomId} are spectating! Starting vote to continue.`);
     
-    const startingBalance = 1000;
-    
-    // Reset all players' balances and status
-    for (const player of room.players) {
-      // Skip split hands
-      if (player.originalPlayer) continue;
-      
-      player.balance = startingBalance;
-      player.status = null;
-      player.cards = [];
-      player.bet = 0;
-      player.score = 0;
-    }
-    
-    // Reset dealer
-    room.dealer = {
-      cards: [],
-      score: 0,
-      status: null
+    // First, emit game_ended with results so it shows in history
+    // Add a special result entry for "all players lost"
+    const allLostResult = {
+      playerId: 'all',
+      username: 'All Players',
+      outcome: 'all_lost',
+      amountChange: 0,
+      message: 'All players ran out of money!'
     };
     
-    // Reset game state to waiting
-    room.gameState = 'waiting';
+    // Update game state to ended first
+    room.gameState = 'ended';
     room.currentTurn = null;
-    room.deck = [];
     
-    // Clear any turn timers
-    clearTurnTimer(roomId);
-    
-    // Notify all players that the game has been reset
-    io.to(roomId).emit('game_reset', {
-      message: 'All players ran out of money! Game has been reset. Everyone starts with $1000 again.',
+    // Emit game ended with all lost message
+    io.to(roomId).emit('game_ended', {
+      dealer,
       players: room.players,
-      gameState: 'waiting'
+      result: {
+        results: [...results, allLostResult]
+      },
+      allPlayersLost: true
     });
     
-    console.log(`Game reset in room ${roomId}. All players now have $${startingBalance}`);
-    return; // Don't emit game_ended, since we reset instead
+    // Clear any existing votes for this room
+    resetVotes[roomId] = {};
+    
+    // After a short delay, show the vote prompt
+    setTimeout(() => {
+      if (!rooms[roomId] || rooms[roomId].gameState !== 'ended') return;
+      
+      io.to(roomId).emit('vote_to_continue', {
+        message: 'All players ran out of money! Vote to continue or reset.',
+        roomId: roomId
+      });
+    }, 2000);
+    
+    return; // Don't continue with normal game_ended flow
   }
   
   // Update game state
