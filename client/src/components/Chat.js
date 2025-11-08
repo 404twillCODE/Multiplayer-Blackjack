@@ -5,8 +5,8 @@ import { useGame } from '../contexts/GameContext';
 const ChatContainer = styled.div`
   display: flex;
   flex-direction: column;
-  height: 50%;
-  border-bottom: 2px solid rgba(212, 175, 55, 0.3);
+  height: 100%;
+  min-height: 400px;
 `;
 
 const ChatHeader = styled.div`
@@ -179,7 +179,7 @@ const Chat = () => {
   
   return (
     <ChatContainer>
-      <ChatHeader>
+      <ChatHeader style={{ display: 'none' }}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
           <path d="M20,2H4A2,2 0 0,0 2,4V22L6,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M6,9H18V11H6M14,14H6V12H14M18,8H6V6H18"></path>
         </svg>

@@ -668,12 +668,13 @@ io.on('connection', (socket) => {
     console.log(`\n🔍 [new_round] Checking reset condition at START for room ${roomId}:`);
     console.log(`   Active players (excluding splits): ${activePlayers.length}`);
     activePlayers.forEach(p => {
-      const isSpectating = p.status === 'spectating' || p.balance <= 0;
-      console.log(`     - ${p.username}: balance=${p.balance}, status=${p.status}, isSpectating=${isSpectating}`);
+      const isSpectating = p.status === 'spectating' || (p.balance <= 0 && p.bet === 0);
+      console.log(`     - ${p.username}: balance=${p.balance}, bet=${p.bet}, status=${p.status}, isSpectating=${isSpectating}`);
     });
     
     const allPlayersSpectating = activePlayers.length > 0 && activePlayers.every(p => {
-      return p.status === 'spectating' || p.balance <= 0;
+      // A player is spectating if they have no balance AND no bet
+      return p.status === 'spectating' || (p.balance <= 0 && p.bet === 0);
     });
     
     console.log(`   ✅ All players spectating: ${allPlayersSpectating}`);
@@ -756,20 +757,25 @@ io.on('connection', (socket) => {
       }
       
       // Mark players with zero balance as spectators
-      if (rooms[roomId].players[i].balance <= 0) {
+      // BUT: If they have a bet placed, they're still playing (all-in scenario)
+      const wasSpectating = rooms[roomId].players[i].status === 'spectating';
+      const hasBet = rooms[roomId].players[i].bet > 0;
+      
+      if (rooms[roomId].players[i].balance <= 0 && !hasBet) {
+        // Only mark as spectating if they have no balance AND no bet
         rooms[roomId].players[i].status = 'spectating';
         rooms[roomId].players[i].balance = 0; // Ensure balance is exactly 0
         rooms[roomId].players[i].cards = [];
         rooms[roomId].players[i].bet = 0;
         rooms[roomId].players[i].score = 0;
         
-        // Emit an event to notify all clients that this player is spectating
-        io.to(roomId).emit('player_spectating', {
-          playerId: rooms[roomId].players[i].id,
-          username: rooms[roomId].players[i].username
-        });
-        
-        console.log(`Player ${rooms[roomId].players[i].username} is spectating due to zero balance (isHost: ${rooms[roomId].players[i].id === rooms[roomId].players[0]?.id})`);
+        // Only emit if they weren't already spectating (to avoid duplicate messages)
+        if (!wasSpectating) {
+          io.to(roomId).emit('player_spectating', {
+            playerId: rooms[roomId].players[i].id,
+            username: rooms[roomId].players[i].username
+          });
+        }
       } else {
         // Reset active players
         rooms[roomId].players[i].cards = [];
@@ -780,16 +786,17 @@ io.on('connection', (socket) => {
     }
     
     // Check again if all players are spectating (after marking them)
+    // A player is spectating if they have no balance AND no bet
     const activePlayersAfterMarking = rooms[roomId].players.filter(p => !p.originalPlayer);
     const allPlayersSpectatingAfter = activePlayersAfterMarking.length > 0 && activePlayersAfterMarking.every(p => {
-      return p.status === 'spectating' || p.balance <= 0;
+      return p.status === 'spectating' || (p.balance <= 0 && p.bet === 0);
     });
     
     console.log(`\n🔍 [new_round] Checking reset condition AFTER marking players for room ${roomId}:`);
     console.log(`  Active players (excluding splits): ${activePlayersAfterMarking.length}`);
     activePlayersAfterMarking.forEach(p => {
-      const isSpectating = p.status === 'spectating' || p.balance <= 0;
-      console.log(`    - ${p.username}: balance=${p.balance}, status=${p.status}, isSpectating=${isSpectating}`);
+      const isSpectating = p.status === 'spectating' || (p.balance <= 0 && p.bet === 0);
+      console.log(`    - ${p.username}: balance=${p.balance}, bet=${p.bet}, status=${p.status}, isSpectating=${isSpectating}`);
     });
     console.log(`  ✅ All players spectating: ${allPlayersSpectatingAfter}`);
     
@@ -1067,19 +1074,15 @@ function dealInitialCards(roomId) {
   const dealDelay = 650; // 650ms delay between each card for realistic dealing pace
   
   // First, mark spectators and initialize card arrays
+  // Don't emit player_spectating here - it's already been emitted in new_round
   for (let i = 0; i < rooms[roomId].players.length; i++) {
     const player = rooms[roomId].players[i];
     
-    if (player.bet === 0) {
+    if (player.bet === 0 || player.status === 'spectating') {
       player.status = 'spectating';
       player.cards = [];
       player.score = 0;
       rooms[roomId].players[i] = player;
-      
-      io.to(roomId).emit('player_spectating', {
-        playerId: player.id,
-        username: player.username
-      });
     } else {
       player.cards = [];
       rooms[roomId].players[i] = player;
@@ -1175,8 +1178,13 @@ function dealInitialCards(roomId) {
     
     // After all initial cards are dealt, set up the game
     setTimeout(() => {
+      // Find first active player (not spectating, has bet, has balance, not a split hand)
       const firstActivePlayerIndex = rooms[roomId].players.findIndex(p => 
-        p.status !== 'spectating' && p.status !== 'blackjack'
+        !p.originalPlayer && 
+        p.status !== 'spectating' && 
+        p.bet > 0 && 
+        p.balance > 0 &&
+        p.status !== 'blackjack'
       );
       
       if (rooms[roomId].players.length > 0 && firstActivePlayerIndex !== -1) {
@@ -1194,7 +1202,8 @@ function dealInitialCards(roomId) {
             startTurnTimer(roomId);
           }, 100);
         }
-      } else if (rooms[roomId].players.some(p => p.status !== 'spectating')) {
+      } else {
+        // No active players, go straight to dealer
         rooms[roomId].currentTurn = 'dealer';
         io.to(roomId).emit('dealer_turn');
         
@@ -1342,14 +1351,19 @@ function nextPlayerTurn(roomId) {
   let nextPlayerIndex = -1;
   for (let i = 1; i < rooms[roomId].players.length; i++) {
     const idx = (currentTurnIndex + i) % rooms[roomId].players.length;
+    const player = rooms[roomId].players[idx];
+    
     // Skip split hands that aren't the current player's turn
-    if (rooms[roomId].players[idx].originalPlayer) continue;
+    if (player.originalPlayer) continue;
     // Skip players who are spectating
-    if (rooms[roomId].players[idx].status === 'spectating') continue;
-    if (!rooms[roomId].players[idx].status) {
-      nextPlayerIndex = idx;
-      break;
-    }
+    if (player.status === 'spectating') continue;
+    // Skip players with no balance or no bet
+    if (player.balance <= 0 || player.bet === 0) continue;
+    // Skip players who have already played (have any status like 'stood', 'bust', 'blackjack')
+    if (player.status) continue;
+    
+    nextPlayerIndex = idx;
+    break;
   }
   
   if (nextPlayerIndex === -1) {
@@ -1541,17 +1555,26 @@ function settleGame(roomId) {
     // Skip split hands for results calculation (they're handled with their original player)
     if (player.originalPlayer) continue;
     
+    // Capture player cards and score before any modifications
+    const playerCards = player.cards ? [...player.cards] : [];
+    const playerScore = player.score || 0;
+    
     let outcome = '';
     let amountChange = 0;
     
     // Skip players who were spectating this round
     if (player.status === 'spectating') {
       outcome = 'spectating';
+      // Capture cards for spectating players too
+      const spectatingCards = player.cards ? [...player.cards] : [];
+      const spectatingScore = player.score || 0;
       results.push({
         playerId: player.id,
         username: player.username,
         outcome,
-        amountChange
+        amountChange,
+        cards: spectatingCards,
+        score: spectatingScore
       });
       continue;
     }
@@ -1596,19 +1619,23 @@ function settleGame(roomId) {
       player.balance += player.bet; // Return the original bet
     }
     
-    // Add to results
+    // Add to results with cards (use captured cards to ensure they're preserved)
     results.push({
       playerId: player.id,
       username: player.username,
       outcome,
-      amountChange
+      amountChange,
+      cards: playerCards,
+      score: playerScore
     });
     
     // Update leaderboard
     updateLeaderboard(player);
     
     // Mark players with zero balance as spectators for the next round
-    if (player.balance <= 0) {
+    // BUT: Don't mark them if they have a bet (all-in scenario - they're still in the current round)
+    // After the round ends and bets are settled, if they still have no balance, they'll be marked as spectating
+    if (player.balance <= 0 && player.bet === 0) {
       player.status = 'spectating';
       console.log(`Player ${player.username} marked as spectator due to zero balance (isHost: ${player.id === room.players[0]?.id})`);
       
@@ -1625,12 +1652,13 @@ function settleGame(roomId) {
   console.log(`\n🔍 [settleGame] Checking reset condition for room ${roomId}:`);
   console.log(`  Active players (excluding splits): ${activePlayers.length}`);
   activePlayers.forEach(p => {
-    const isSpectating = p.status === 'spectating' || p.balance <= 0;
-    console.log(`    - ${p.username}: balance=${p.balance}, status=${p.status}, isSpectating=${isSpectating}`);
+    const isSpectating = p.status === 'spectating' || (p.balance <= 0 && p.bet === 0);
+    console.log(`    - ${p.username}: balance=${p.balance}, bet=${p.bet}, status=${p.status}, isSpectating=${isSpectating}`);
   });
   
   const allPlayersSpectating = activePlayers.length > 0 && activePlayers.every(p => {
-    return p.status === 'spectating' || p.balance <= 0;
+    // A player is spectating if they have no balance AND no bet
+    return p.status === 'spectating' || (p.balance <= 0 && p.bet === 0);
   });
   
   console.log(`  ✅ [settleGame] All players spectating: ${allPlayersSpectating}`);
@@ -1683,13 +1711,18 @@ function settleGame(roomId) {
   room.gameState = 'ended';
   room.currentTurn = null;
   
-  // Emit game ended event with results
+  // Emit game ended event with results (including dealer cards)
   io.to(roomId).emit('game_ended', {
-    dealer,
+    dealer: {
+      ...dealer,
+      cards: dealer.cards || [],
+      score: dealerScore
+    },
     players: room.players,
     result: {
       dealerScore,
       dealerHasBlackjack,
+      dealerCards: dealer.cards || [],
       results
     }
   });

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useGame } from '../contexts/GameContext';
@@ -151,7 +151,7 @@ const ControlsSection = styled.div`
 `;
 
 const SidebarContainer = styled.div`
-  width: 350px;
+  width: 400px;
   background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
   border-left: 2px solid rgba(212, 175, 55, 0.5);
   display: flex;
@@ -160,6 +160,111 @@ const SidebarContainer = styled.div`
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.5);
   position: relative;
   z-index: 5;
+`;
+
+const ChatButton = styled.button`
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+  border: 2px solid rgba(212, 175, 55, 0.8);
+  color: #0a2219;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.4);
+  z-index: 200;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-3px) scale(1.1);
+    box-shadow: 0 6px 25px rgba(212, 175, 55, 0.6);
+  }
+  
+  &:active {
+    transform: translateY(-1px) scale(1.05);
+  }
+`;
+
+const ChatModal = styled.div`
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 500px;
+  max-width: 90vw;
+  max-height: 80vh;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.98) 0%, rgba(0, 0, 0, 0.98) 100%);
+  border: 3px solid #d4af37;
+  border-radius: 20px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(212, 175, 55, 0.4);
+  backdrop-filter: blur(10px);
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+`;
+
+const ChatModalHeader = styled.div`
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(10, 34, 25, 0.8) 0%, rgba(0, 0, 0, 0.8) 100%);
+  border-bottom: 2px solid rgba(212, 175, 55, 0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const ChatModalTitle = styled.h2`
+  color: #d4af37;
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 0;
+`;
+
+const CloseButton = styled.button`
+  background: transparent;
+  border: none;
+  color: #d4af37;
+  font-size: 28px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: rgba(212, 175, 55, 0.2);
+    transform: rotate(90deg);
+  }
+`;
+
+const ChatModalContent = styled.div`
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+`;
+
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 399;
+  backdrop-filter: blur(2px);
 `;
 
 const StartGameButton = styled.button`
@@ -509,6 +614,7 @@ const VoteStatus = styled.div`
 
 const GameRoom = () => {
   const navigate = useNavigate();
+  const [showChat, setShowChat] = useState(false);
   const { 
     connected, roomId, players, dealer, gameState, error,
     startGame, leaveRoom, getCurrentPlayer, isPlayerTurn, currentTurn,
@@ -555,8 +661,9 @@ const GameRoom = () => {
   const getBettingStatus = () => {
     if (gameState !== 'betting') return null;
     
+    // Active players are those who have balance OR have a bet (all-in scenario)
     const activePlayers = players.filter(p => 
-      p.balance > 0 && p.status !== 'spectating' && !p.id.includes('-split')
+      (p.balance > 0 || p.bet > 0) && p.status !== 'spectating' && !p.id.includes('-split')
     );
     
     const playersWithBets = activePlayers.filter(p => p.bet > 0);
@@ -578,8 +685,9 @@ const GameRoom = () => {
   const renderPlayerSeats = () => {
     // Filter out spectators (including the host if they're spectating)
     const activePlayers = players.filter(player => {
-      // During betting phase, filter out players with zero balance
-      if (gameState === 'betting' && player.balance <= 0) return false;
+      // During betting phase, filter out players with zero balance AND no bet
+      // If they have a bet, they're still playing (all-in scenario)
+      if (gameState === 'betting' && player.balance <= 0 && player.bet === 0) return false;
       
       // Filter out players with spectating status
       return player.status !== 'spectating';
@@ -619,13 +727,14 @@ const GameRoom = () => {
   
   // Add a function to get spectators
   const getSpectators = () => {
-    // Get players who are either marked as spectating or have zero balance during betting phase
+    // Get players who are either marked as spectating or have zero balance AND no bet
     const spectators = players.filter(player => {
       // Include players with spectating status
       if (player.status === 'spectating') return true;
       
-      // During betting phase, also include players with zero balance
-      if (gameState === 'betting' && player.balance <= 0) return true;
+      // During betting phase, include players with zero balance AND no bet
+      // If they have a bet, they're still playing (all-in scenario)
+      if (gameState === 'betting' && player.balance <= 0 && player.bet === 0) return true;
       
       return false;
     });
@@ -648,8 +757,9 @@ const GameRoom = () => {
       !activePlayer.id.includes('-split'); // Can't split a split hand
     
     if (gameState === 'betting') {
-      // Don't show betting panel for players with zero balance or spectating status
-      if (currentPlayer?.balance <= 0 || currentPlayer?.status === 'spectating') {
+      // Don't show betting panel for players with zero balance AND no bet (spectating)
+      // If they have a bet, they're still playing (all-in scenario)
+      if ((currentPlayer?.balance <= 0 && currentPlayer?.bet === 0) || currentPlayer?.status === 'spectating') {
         return (
           <div style={{ 
             textAlign: 'center', 
@@ -830,9 +940,29 @@ const GameRoom = () => {
         </GameTable>
         
         <SidebarContainer>
-          <Chat />
           <GameHistory />
         </SidebarContainer>
+        
+        {/* Chat Button */}
+        <ChatButton onClick={() => setShowChat(true)} title="Open Chat">
+          💬
+        </ChatButton>
+        
+        {/* Chat Modal */}
+        {showChat && (
+          <>
+            <ModalOverlay onClick={() => setShowChat(false)} />
+            <ChatModal>
+              <ChatModalHeader>
+                <ChatModalTitle>💬 Chat</ChatModalTitle>
+                <CloseButton onClick={() => setShowChat(false)}>×</CloseButton>
+              </ChatModalHeader>
+              <ChatModalContent>
+                <Chat />
+              </ChatModalContent>
+            </ChatModal>
+          </>
+        )}
       </GameContent>
     </GameRoomContainer>
   );

@@ -142,36 +142,42 @@ const Chip = styled.div`
 `;
 
 const RedChip = styled(Chip)`
-  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+  background: linear-gradient(135deg, #e53935 0%, #c62828 100%);
   color: white;
+  box-shadow: 0 4px 15px rgba(229, 57, 53, 0.4);
 `;
 
 const BlueChip = styled(Chip)`
-  background: linear-gradient(135deg, #2196f3 0%, #1e88e5 100%);
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
   color: white;
+  box-shadow: 0 4px 15px rgba(25, 118, 210, 0.4);
 `;
 
 const GreenChip = styled(Chip)`
-  background: linear-gradient(135deg, #4caf50 0%, #43a047 100%);
+  background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%);
   color: white;
+  box-shadow: 0 4px 15px rgba(56, 142, 60, 0.4);
+`;
+
+const YellowChip = styled(Chip)`
+  background: linear-gradient(135deg, #673ab7 0%, #5e35b1 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(103, 58, 183, 0.4);
 `;
 
 const BlackChip = styled(Chip)`
-  background: linear-gradient(135deg, #212121 0%, #000000 100%);
+  background: linear-gradient(135deg, #424242 0%, #212121 100%);
   color: #d4af37;
-  border: 2px solid rgba(212, 175, 55, 0.5);
-`;
-
-const PurpleChip = styled(Chip)`
-  background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
-  color: white;
+  border: 2px solid rgba(212, 175, 55, 0.6);
+  box-shadow: 0 4px 15px rgba(66, 66, 66, 0.5);
 `;
 
 const GoldChip = styled(Chip)`
-  background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
-  color: #0a2219;
+  background: linear-gradient(135deg, #ffd700 0%, #ffc107 100%);
+  color: #1a1a1a;
   font-size: 0.85rem;
-  border: 2px solid rgba(212, 175, 55, 0.8);
+  border: 2px solid rgba(255, 215, 0, 0.8);
+  box-shadow: 0 4px 20px rgba(255, 215, 0, 0.5);
 `;
 
 const BetDisplay = styled.div`
@@ -368,20 +374,20 @@ const BettingPanel = ({ onBetComplete, playerBalance }) => {
         >
           $25
         </GreenChip>
-        <BlackChip 
+        <YellowChip 
           onClick={() => handleChipClick(50)}
           selected={selectedChip === 50}
           disabled={isChipDisabled(50)}
         >
           $50
-        </BlackChip>
-        <PurpleChip 
+        </YellowChip>
+        <BlackChip 
           onClick={() => handleChipClick(100)}
           selected={selectedChip === 100}
           disabled={isChipDisabled(100)}
         >
           $100
-        </PurpleChip>
+        </BlackChip>
         <GoldChip 
           onClick={() => handleChipClick(playerBalance)}
           selected={currentBet === playerBalance}
