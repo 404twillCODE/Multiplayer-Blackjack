@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { createGlobalStyle } from 'styled-components';
+import { AuthProvider } from './contexts/AuthContext';
 import { GameProvider } from './contexts/GameContext';
 
 // Components
@@ -11,6 +12,7 @@ import Home from './pages/Home';
 import GameRoom from './pages/GameRoom';
 import Rules from './pages/Rules';
 import Leaderboard from './pages/Leaderboard';
+import Profile from './pages/Profile';
 
 const GlobalStyle = createGlobalStyle`
   * {
@@ -18,8 +20,6 @@ const GlobalStyle = createGlobalStyle`
     padding: 0;
     box-sizing: border-box;
   }
-  
-  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
   
   body, html {
     height: 100%;
@@ -59,29 +59,37 @@ function App() {
   return (
     <Router>
       <GlobalStyle />
-      <GameProvider>
-        <Routes>
-          <Route path="/game-room" element={<GameRoom />} />
-          <Route path="/" element={
-            <>
-              <Navbar />
-              <Home />
-            </>
-          } />
-          <Route path="/rules" element={
-            <>
-              <Navbar />
-              <Rules />
-            </>
-          } />
-          <Route path="/leaderboard" element={
-            <>
-              <Navbar />
-              <Leaderboard />
-            </>
-          } />
-        </Routes>
-      </GameProvider>
+      <AuthProvider>
+        <GameProvider>
+          <Routes>
+            <Route path="/game-room" element={<GameRoom />} />
+            <Route path="/" element={
+              <>
+                <Navbar />
+                <Home />
+              </>
+            } />
+            <Route path="/rules" element={
+              <>
+                <Navbar />
+                <Rules />
+              </>
+            } />
+            <Route path="/leaderboard" element={
+              <>
+                <Navbar />
+                <Leaderboard />
+              </>
+            } />
+            <Route path="/profile" element={
+              <>
+                <Navbar />
+                <Profile />
+              </>
+            } />
+          </Routes>
+        </GameProvider>
+      </AuthProvider>
     </Router>
   );
 }

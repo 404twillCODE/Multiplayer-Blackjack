@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext';
 import { SOCKET_SERVER } from '../config';
 
 export const GameContext = createContext();
@@ -8,10 +9,21 @@ export const GameContext = createContext();
 export const useGame = () => useContext(GameContext);
 
 export const GameProvider = ({ children }) => {
+  const { username: authUsername, balance: authBalance, setBalance: updateAuthBalance } = useAuth();
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
-  const [username, setUsername] = useState('');
-  const [balance, setBalance] = useState(1000);
+  const [username, setUsername] = useState(authUsername || '');
+  const [balance, setBalance] = useState(authBalance || 1000);
+
+  // Sync with auth context when it changes
+  useEffect(() => {
+    if (authUsername) {
+      setUsername(authUsername);
+    }
+    if (authBalance !== undefined) {
+      setBalance(authBalance);
+    }
+  }, [authUsername, authBalance]);
   const [roomId, setRoomId] = useState(null);
   const [players, setPlayers] = useState([]);
   const [dealer, setDealer] = useState({ cards: [], score: 0 });
@@ -137,8 +149,33 @@ export const GameProvider = ({ children }) => {
       
       // Add system message about player leaving
       if (data.leftPlayer) {
+        const message = data.wasHost 
+          ? `${data.leftPlayer} (host) disconnected from the room`
+          : `${data.leftPlayer} disconnected from the room`;
         addMessage({
-          content: `${data.leftPlayer} left the room`,
+          content: message,
+          type: 'system',
+          timestamp: Date.now()
+        });
+      }
+    });
+    
+    socket.on('room_update', (data) => {
+      if (!data) return;
+      if (data.players) setPlayers(data.players);
+      if (data.gameState) setGameState(data.gameState);
+      if (data.dealer) setDealer(data.dealer);
+    });
+    
+    socket.on('game_state_update', (data) => {
+      if (!data) return;
+      if (data.gameState) setGameState(data.gameState);
+      if (data.players) setPlayers(data.players);
+      if (data.dealer) setDealer(data.dealer);
+      
+      if (data.gameState === 'waiting') {
+        addMessage({
+          content: 'Game reset to waiting state - all players disconnected',
           type: 'system',
           timestamp: Date.now()
         });
@@ -164,6 +201,8 @@ export const GameProvider = ({ children }) => {
       socket.off('player_joined');
       socket.off('player_left');
       socket.off('player_kicked');
+      socket.off('room_update');
+      socket.off('game_state_update');
     };
   }, [socket, navigate]);
   
@@ -229,7 +268,9 @@ export const GameProvider = ({ children }) => {
       }
       
       if (data.playerId === socket.id && data.balance !== undefined) {
-        setBalance(data.balance);
+        const newBalance = data.balance;
+        setBalance(newBalance);
+        updateAuthBalance(newBalance);
       }
     });
     
@@ -237,7 +278,9 @@ export const GameProvider = ({ children }) => {
       if (!data) return;
       // Update balance when current player places bet
       if (data.balance !== undefined) {
-        setBalance(data.balance);
+        const newBalance = data.balance;
+        setBalance(newBalance);
+        updateAuthBalance(newBalance);
       }
     });
     
@@ -326,7 +369,9 @@ export const GameProvider = ({ children }) => {
       
       const currentPlayer = data.players?.find(p => p.id === socket.id);
       if (currentPlayer) {
-        setBalance(currentPlayer.balance);
+        const newBalance = currentPlayer.balance;
+        setBalance(newBalance);
+        updateAuthBalance(newBalance);
       }
       
       addMessage({
@@ -493,7 +538,7 @@ export const GameProvider = ({ children }) => {
   }, [socket, autoSkipNewRound, players, startNewRound]);
   
   // Game actions
-  const createRoom = (username, initialBalance = 1000) => {
+  const createRoom = (usernameOverride = null, initialBalanceOverride = null) => {
     if (!connected || !socket) {
       setError('Not connected to server. Please wait a moment and try again.');
       return;
@@ -504,17 +549,33 @@ export const GameProvider = ({ children }) => {
       return;
     }
     
-    setUsername(username);
-    setBalance(initialBalance);
-    socket.emit('create_room', { username, balance: initialBalance });
+    const finalUsername = usernameOverride || authUsername || username;
+    const finalBalance = initialBalanceOverride !== null ? initialBalanceOverride : (authBalance || balance || 1000);
+    
+    if (!finalUsername) {
+      setError('Username is required. Please sign in or continue as guest.');
+      return;
+    }
+    
+    setUsername(finalUsername);
+    setBalance(finalBalance);
+    socket.emit('create_room', { username: finalUsername, balance: finalBalance });
   };
   
-  const joinRoom = (roomId, username, initialBalance = 1000) => {
+  const joinRoom = (roomId, usernameOverride = null, initialBalanceOverride = null) => {
     if (!connected) return;
     
-    setUsername(username);
-    setBalance(initialBalance);
-    socket.emit('join_room', { roomId, username, balance: initialBalance });
+    const finalUsername = usernameOverride || authUsername || username;
+    const finalBalance = initialBalanceOverride !== null ? initialBalanceOverride : (authBalance || balance || 1000);
+    
+    if (!finalUsername) {
+      setError('Username is required. Please sign in or continue as guest.');
+      return;
+    }
+    
+    setUsername(finalUsername);
+    setBalance(finalBalance);
+    socket.emit('join_room', { roomId, username: finalUsername, balance: finalBalance });
   };
   
   const startGame = () => {

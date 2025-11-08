@@ -1033,34 +1033,103 @@ io.on('connection', (socket) => {
     
     // Find all rooms the user is in
     for (const roomId in rooms) {
-      const playerIndex = rooms[roomId].players.findIndex(p => p.id === socket.id);
+      const room = rooms[roomId];
+      const playerIndex = room.players.findIndex(p => p.id === socket.id && !p.originalPlayer);
       
       if (playerIndex !== -1) {
-        // Remove player from room
-        const player = rooms[roomId].players[playerIndex];
-        rooms[roomId].players.splice(playerIndex, 1);
+        // Remove player from room (and all their split hands)
+        const disconnectedPlayer = room.players[playerIndex];
+        const wasHost = playerIndex === 0;
+        
+        // Remove the player and all their split hands
+        room.players = room.players.filter(p => 
+          p.id !== socket.id && p.originalPlayer !== socket.id
+        );
+        
+        // Clear any turn timers for this room
+        clearTurnTimer(roomId);
         
         // If room is empty, delete it
-        if (rooms[roomId].players.length === 0) {
-          // Clear any turn timers before deleting room
-          clearTurnTimer(roomId);
+        if (room.players.length === 0) {
           delete rooms[roomId];
-          console.log(`Room ${roomId} deleted`);
+          delete resetVotes[roomId];
+          console.log(`Room ${roomId} deleted after all players disconnected`);
           continue;
+        }
+        
+        // If the disconnected player was the host, assign a new host (first remaining player)
+        if (wasHost && room.players.length > 0) {
+          console.log(`Host ${disconnectedPlayer.username} disconnected. New host: ${room.players[0].username}`);
+        }
+        
+        // Handle game state based on when player disconnected
+        if (room.gameState === 'playing') {
+          // If it was their turn, move to next player
+          if (room.currentTurn === socket.id) {
+            nextPlayerTurn(roomId);
+          }
+          // If no active players left, end the game
+          const activePlayers = room.players.filter(p => 
+            !p.originalPlayer && 
+            p.status !== 'spectating' && 
+            p.bet > 0
+          );
+          if (activePlayers.length === 0) {
+            // No active players, reset to waiting state
+            room.gameState = 'waiting';
+            room.currentTurn = null;
+            // Clear all player bets and statuses
+            room.players.forEach(p => {
+              if (!p.originalPlayer) {
+                p.bet = 0;
+                p.cards = [];
+                p.score = 0;
+                p.status = null;
+              }
+            });
+            room.dealer = { cards: [], score: 0, status: null };
+            io.to(roomId).emit('game_state_update', {
+              gameState: 'waiting',
+              players: room.players,
+              dealer: room.dealer
+            });
+          }
+        } else if (room.gameState === 'betting') {
+          // If in betting phase, check if all remaining players have bet
+          const playersWithBets = room.players.filter(p => 
+            !p.originalPlayer && 
+            p.bet > 0 && 
+            p.balance > 0
+          );
+          const playersNeedingBets = room.players.filter(p => 
+            !p.originalPlayer && 
+            p.bet === 0 && 
+            p.balance > 0 &&
+            p.status !== 'spectating'
+          );
+          
+          // If all remaining players have bet, start the game
+          if (playersNeedingBets.length === 0 && playersWithBets.length > 0) {
+            room.gameState = 'playing';
+            dealInitialCards(roomId);
+          }
         }
         
         // Notify remaining players
         io.to(roomId).emit('player_left', {
-          players: rooms[roomId].players,
-          leftPlayer: player.username
+          players: room.players,
+          leftPlayer: disconnectedPlayer.username,
+          wasHost: wasHost
         });
         
-        // If game in progress and it was their turn, move to next player
-        if (rooms[roomId].gameState === 'playing' && rooms[roomId].currentTurn === socket.id) {
-          nextPlayerTurn(roomId);
-        }
+        // Also emit updated room state
+        io.to(roomId).emit('room_update', {
+          players: room.players,
+          gameState: room.gameState,
+          dealer: room.dealer
+        });
         
-        console.log(`Player ${player.username} left room ${roomId}`);
+        console.log(`Player ${disconnectedPlayer.username} (${socket.id}) disconnected from room ${roomId}`);
       }
     }
   });
@@ -1179,20 +1248,30 @@ function dealInitialCards(roomId) {
     // After all initial cards are dealt, set up the game
     setTimeout(() => {
       // Find first active player (not spectating, has bet, has balance, not a split hand)
+      // Include players with blackjack - we'll skip them after finding them
       const firstActivePlayerIndex = rooms[roomId].players.findIndex(p => 
         !p.originalPlayer && 
         p.status !== 'spectating' && 
         p.bet > 0 && 
-        p.balance > 0 &&
-        p.status !== 'blackjack'
+        p.balance > 0
       );
       
-      if (rooms[roomId].players.length > 0 && firstActivePlayerIndex !== -1) {
-        rooms[roomId].currentTurn = rooms[roomId].players[firstActivePlayerIndex].id;
+      console.log(`[Deal] Looking for first active player. Found index: ${firstActivePlayerIndex}, Total players: ${rooms[roomId].players.length}`);
+      
+      if (firstActivePlayerIndex !== -1) {
+        const firstPlayer = rooms[roomId].players[firstActivePlayerIndex];
+        console.log(`[Deal] First active player: ${firstPlayer.username}, Status: ${firstPlayer.status}, Has blackjack: ${firstPlayer.status === 'blackjack'}`);
         
-        if (rooms[roomId].players[firstActivePlayerIndex].status === 'blackjack') {
+        // If the first player has blackjack, skip to next player
+        if (firstPlayer.status === 'blackjack') {
+          console.log(`[Deal] First player has blackjack, moving to next player`);
+          rooms[roomId].currentTurn = firstPlayer.id;
           nextPlayerTurn(roomId);
         } else {
+          // Give the first player their turn
+          rooms[roomId].currentTurn = firstPlayer.id;
+          console.log(`[Deal] Starting turn for player: ${firstPlayer.username} (${firstPlayer.id})`);
+          
           io.to(roomId).emit('player_turn', {
             playerId: rooms[roomId].currentTurn,
             players: rooms[roomId].players
@@ -1203,6 +1282,16 @@ function dealInitialCards(roomId) {
           }, 100);
         }
       } else {
+        // No active players found - this shouldn't happen if players have bets
+        console.log(`[Deal] WARNING: No active players found! Going straight to dealer.`);
+        console.log(`[Deal] Players in room:`, rooms[roomId].players.map(p => ({
+          username: p.username,
+          bet: p.bet,
+          balance: p.balance,
+          status: p.status,
+          originalPlayer: p.originalPlayer
+        })));
+        
         // No active players, go straight to dealer
         rooms[roomId].currentTurn = 'dealer';
         io.to(roomId).emit('dealer_turn');
@@ -1230,7 +1319,7 @@ function clearTurnTimer(roomId) {
   });
 }
 
-// Start a timer to auto-skip a player after 30 seconds
+// Start a timer to auto-skip a player after 60 seconds
 function startTurnTimer(roomId) {
   // Clear any existing timer first
   clearTurnTimer(roomId);
@@ -1248,11 +1337,18 @@ function startTurnTimer(roomId) {
   
   const player = rooms[roomId].players.find(p => p.id === currentTurn);
   const playerName = player?.username || currentTurn;
-  console.log(`[Timer] Starting 30-second timer for player ${playerName} (${currentTurn}) in room ${roomId}`);
   
-  // Set a 30-second timer to automatically stand the player
+  // Don't start timer if player already has a status (already played)
+  if (player && player.status && player.status !== 'playing') {
+    console.log(`[Timer] Player ${playerName} already has status ${player.status}, not starting timer`);
+    return;
+  }
+  
+  console.log(`[Timer] Starting 60-second timer for player ${playerName} (${currentTurn}) in room ${roomId}`);
+  
+  // Set a 60-second timer to automatically stand the player (increased from 30 seconds)
   turnTimers[roomId] = setTimeout(() => {
-    console.log(`[Timer] 30 seconds elapsed for room ${roomId}, checking if auto-skip needed...`);
+    console.log(`[Timer] 60 seconds elapsed for room ${roomId}, checking if auto-skip needed...`);
     
     if (!rooms[roomId] || rooms[roomId].gameState !== 'playing') {
       console.log(`[Timer] Game state changed, not auto-skipping. gameState=${rooms[roomId]?.gameState}`);
@@ -1274,15 +1370,22 @@ function startTurnTimer(roomId) {
     const player = rooms[roomId].players[playerIndex];
     const playerName = player?.username || currentTurn;
     
-    // Check if we've already auto-skipped this player for this turn
-    const skipKey = `${roomId}-${currentTurn}`;
-    if (autoSkippedPlayers[skipKey]) {
-      console.log(`[Timer] Player ${playerName} already auto-skipped, skipping duplicate emission`);
+    // Check if player already has a status (already played)
+    if (player.status && player.status !== 'playing') {
+      console.log(`[Timer] Player ${playerName} already has status ${player.status}, not auto-skipping`);
       delete turnTimers[roomId];
       return;
     }
     
-    console.log(`[Timer] ⏰ Auto-skipping player ${playerName} (${currentTurn}) in room ${roomId} - 30 seconds elapsed`);
+    // Check if we've already auto-skipped this player for this turn
+    const skipKey = `${roomId}-${currentTurn}`;
+    if (autoSkippedPlayers[skipKey]) {
+      console.log(`[Timer] Player ${playerName} already auto-skipped, skipping duplicate`);
+      delete turnTimers[roomId];
+      return;
+    }
+    
+    console.log(`[Timer] ⏰ Auto-skipping player ${playerName} (${currentTurn}) in room ${roomId} - 60 seconds elapsed`);
     
     // Mark this player as auto-skipped
     autoSkippedPlayers[skipKey] = true;
@@ -1304,7 +1407,7 @@ function startTurnTimer(roomId) {
     
     // Move to next player's turn
     nextPlayerTurn(roomId);
-  }, 30000); // 30 seconds
+  }, 60000); // 60 seconds (increased from 30)
 }
 
 // Move to the next player's turn
@@ -1411,7 +1514,7 @@ function nextPlayerTurn(roomId) {
         players: rooms[roomId].players
       });
       
-      // Start the 30-second auto-skip timer for the new player
+      // Start the 60-second auto-skip timer for the new player
       // Add a small delay to ensure the turn is fully set
       setTimeout(() => {
         startTurnTimer(roomId);

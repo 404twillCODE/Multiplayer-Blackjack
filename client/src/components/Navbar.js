@@ -136,6 +136,9 @@ const Navbar = () => {
           <NavLink to="/leaderboard" $active={location.pathname === '/leaderboard'}>
             Leaderboard
           </NavLink>
+          <NavLink to="/profile" $active={location.pathname === '/profile'}>
+            Profile
+          </NavLink>
           <PlayButton to="/">
             Play Now
           </PlayButton>

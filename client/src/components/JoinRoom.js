@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
 import { useGame } from '../contexts/GameContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const JoinContainer = styled.div`
   background: linear-gradient(135deg, rgba(10, 34, 25, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
@@ -140,7 +141,7 @@ const ErrorMessage = styled.div`
 `;
 
 const JoinRoom = () => {
-  const [username, setUsername] = useState('');
+  const { username } = useAuth();
   const [roomCode, setRoomCode] = useState('');
   const [localError, setLocalError] = useState(null);
   const { createRoom, joinRoom, error, connected } = useGame();
@@ -148,29 +149,21 @@ const JoinRoom = () => {
   const handleCreateRoom = (e) => {
     e.preventDefault();
     
-    if (!username.trim()) {
-      setLocalError('Please enter a username');
-      return;
-    }
-    
-    createRoom(username);
+    // Username comes from auth context now, no need to check
+    createRoom();
     // Don't navigate immediately, wait for room_joined event in GameContext
   };
   
   const handleJoinRoom = (e) => {
     e.preventDefault();
     
-    if (!username.trim()) {
-      setLocalError('Please enter a username');
-      return;
-    }
-    
     if (!roomCode.trim()) {
       setLocalError('Please enter a room code');
       return;
     }
     
-    joinRoom(roomCode.toUpperCase(), username);
+    // Username comes from auth context now
+    joinRoom(roomCode.toUpperCase());
     // Don't navigate immediately, wait for room_joined event in GameContext
   };
   
@@ -178,17 +171,18 @@ const JoinRoom = () => {
     <JoinContainer>
       <Title>Join the Game</Title>
       <Form>
-        <InputGroup>
-          <Label htmlFor="username">Username</Label>
-          <Input
-            id="username"
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Enter your username"
-            maxLength={15}
-          />
-        </InputGroup>
+        <div style={{ 
+          padding: '15px', 
+          background: 'rgba(212, 175, 55, 0.1)', 
+          border: '1px solid rgba(212, 175, 55, 0.3)',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          textAlign: 'center',
+          color: '#d4af37',
+          fontWeight: 600
+        }}>
+          Playing as: {username}
+        </div>
         
         <InputGroup>
           <Label htmlFor="roomCode">Room Code (for joining)</Label>

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
+import { useAuth } from '../contexts/AuthContext';
 import JoinRoom from '../components/JoinRoom';
+import Auth from '../components/Auth';
 
 const shimmer = keyframes`
   0% {
@@ -406,6 +408,17 @@ const BackButton = styled.button`
 
 const Home = () => {
   const [selectedGame, setSelectedGame] = useState(null);
+  const { loading, username, isGuest } = useAuth();
+  const [showAuth, setShowAuth] = useState(false);
+
+  // Show auth if user hasn't authenticated or chosen guest mode yet
+  React.useEffect(() => {
+    if (!loading && !username) {
+      setShowAuth(true);
+    } else if (username) {
+      setShowAuth(false);
+    }
+  }, [loading, username]);
 
   const games = [
     {
@@ -436,11 +449,40 @@ const Home = () => {
 
   const selectedGameData = games.find(g => g.id === selectedGame);
 
+  // Show auth screen if not authenticated
+  if (showAuth) {
+    return <Auth onAuthComplete={() => setShowAuth(false)} />;
+  }
+
+  if (loading) {
+    return (
+      <HomeContainer>
+        <HeroSection>
+          <HeroTitle>Luxury Casino</HeroTitle>
+          <HeroSubtitle>Loading...</HeroSubtitle>
+        </HeroSection>
+      </HomeContainer>
+    );
+  }
+
   return (
     <HomeContainer>
       <HeroSection>
         <HeroTitle>Luxury Casino</HeroTitle>
         <HeroSubtitle>Choose your game and experience the thrill</HeroSubtitle>
+        {isGuest && (
+          <div style={{ 
+            marginTop: '20px', 
+            padding: '10px 20px', 
+            background: 'rgba(212, 175, 55, 0.1)', 
+            border: '1px solid rgba(212, 175, 55, 0.3)',
+            borderRadius: '8px',
+            color: '#d4af37',
+            fontSize: '0.9rem'
+          }}>
+            Playing as Guest: {username} - Sign up to save your progress!
+          </div>
+        )}
       </HeroSection>
       
       {!selectedGame ? (
