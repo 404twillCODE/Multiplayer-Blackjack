@@ -139,25 +139,11 @@ const ErrorMessage = styled.div`
   font-size: 14px;
 `;
 
-const ConnectionStatus = styled.div`
-  text-align: center;
-  margin-bottom: 20px;
-  padding: 10px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  background: ${props => props.$connected 
-    ? 'rgba(76, 175, 80, 0.2)' 
-    : 'rgba(244, 67, 54, 0.2)'};
-  color: ${props => props.$connected ? '#4caf50' : '#f44336'};
-  border: 2px solid ${props => props.$connected ? '#4caf50' : '#f44336'};
-`;
-
 const JoinRoom = () => {
   const [username, setUsername] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [localError, setLocalError] = useState(null);
-  const { createRoom, joinRoom, error, connected, socket } = useGame();
+  const { createRoom, joinRoom, error, connected } = useGame();
   
   const handleCreateRoom = (e) => {
     e.preventDefault();
@@ -191,13 +177,6 @@ const JoinRoom = () => {
   return (
     <JoinContainer>
       <Title>Join the Game</Title>
-      <ConnectionStatus $connected={connected}>
-        {connected ? (
-          <span>🟢 Connected to server</span>
-        ) : (
-          <span>🔴 Not connected - {error || 'Connecting...'}</span>
-        )}
-      </ConnectionStatus>
       <Form>
         <InputGroup>
           <Label htmlFor="username">Username</Label>

@@ -535,9 +535,7 @@ const GameRoom = () => {
   };
   
   // Check if user is the host (first player)
-  // Use socket.id directly from context to ensure accurate comparison
   const isHost = players.length > 0 && socket?.id === players[0]?.id;
-  
   
   // Handler for auto-skip toggle
   const handleAutoSkipToggle = () => {
@@ -547,11 +545,9 @@ const GameRoom = () => {
   // Handle kick player (used by PlayerSeat component)
   const handleKickPlayer = (playerId) => {
     if (!roomId) {
-      console.error('❌ No roomId available!');
       alert('Error: No room ID found. Please refresh the page.');
       return;
     }
-    
     kickPlayer(playerId);
   };
   
@@ -565,7 +561,6 @@ const GameRoom = () => {
     
     const playersWithBets = activePlayers.filter(p => p.bet > 0);
     const playersWithoutBets = activePlayers.filter(p => p.bet === 0 || !p.bet);
-    
     
     return {
       total: activePlayers.length,
@@ -589,7 +584,6 @@ const GameRoom = () => {
       // Filter out players with spectating status
       return player.status !== 'spectating';
     });
-    
     
     return activePlayers.map((player, index) => {
       // Check if this is the current player or a split hand of the current player
@@ -669,12 +663,7 @@ const GameRoom = () => {
         );
       }
       
-      const handleBetComplete = () => {
-        // This is a placeholder function that will be called when a bet is placed
-      };
-      
       return <BettingPanel 
-        onBetComplete={handleBetComplete} 
         playerBalance={currentPlayer?.balance || 0} 
       />;
     } else if (gameState === 'playing' && isPlayerTurn() && !hasBlackjack) {

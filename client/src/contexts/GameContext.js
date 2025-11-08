@@ -37,28 +37,14 @@ export const GameProvider = ({ children }) => {
 
   // Define startNewRound function before it's used in useEffect
   const startNewRound = useCallback(() => {
-    if (!connected) {
-      console.error("Cannot start new round: Not connected to server");
-      return;
-    }
-    
-    if (!roomId) {
-      console.error("Cannot start new round: No room ID");
-      return;
-    }
-    
-    if (!socket) {
-      console.error("Cannot start new round: Socket not initialized");
-      return;
-    }
-    
+    if (!connected || !roomId || !socket) return;
     socket.emit('new_round', { roomId });
   }, [connected, roomId, socket]);
 
   // Connect to socket server
   useEffect(() => {
     const newSocket = io(SOCKET_SERVER, {
-      transports: ['polling', 'websocket'], // Try polling first, then websocket
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionDelay: 2000,
       reconnectionAttempts: 10,
@@ -68,20 +54,11 @@ export const GameProvider = ({ children }) => {
       rememberUpgrade: false
     });
     
-    // Set socket immediately so it's available even if not connected yet
     setSocket(newSocket);
-    
-    newSocket.io.on('error', (error) => {
-      console.error('Connection error:', error);
-    });
-    
-    newSocket.io.on('reconnect_failed', () => {
-      console.error('Reconnection failed');
-    });
     
     newSocket.on('connect', () => {
       setConnected(true);
-      setError(null); // Clear any previous errors
+      setError(null);
     });
     
     newSocket.on('connect_error', (error) => {
@@ -107,7 +84,6 @@ export const GameProvider = ({ children }) => {
     });
     
     newSocket.on('error', (data) => {
-      console.error('Socket error:', data);
       setError(data.message || 'An error occurred');
       setTimeout(() => setError(null), 5000);
     });
@@ -247,12 +223,11 @@ export const GameProvider = ({ children }) => {
     
     socket.on('player_bet_placed', (data) => {
       if (!data) return;
-      // Update players array with the new bet information
+      
       if (data.players && Array.isArray(data.players)) {
-        setPlayers([...data.players]); // Create new array to ensure React detects change
+        setPlayers([...data.players]);
       }
       
-      // Update balance if it's the current player
       if (data.playerId === socket.id && data.balance !== undefined) {
         setBalance(data.balance);
       }
@@ -341,23 +316,19 @@ export const GameProvider = ({ children }) => {
     socket.on('game_reset', (data) => {
       if (!data) return;
       
-      // Hide vote prompt when game resets
       setShowVotePrompt(false);
       setVoteStatus(null);
       setHasVoted(false);
-      
       setGameState('waiting');
       setDealer({ cards: [], score: 0 });
       setCurrentTurn(null);
       setPlayers(data.players || []);
       
-      // Update balance for current player
       const currentPlayer = data.players?.find(p => p.id === socket.id);
       if (currentPlayer) {
         setBalance(currentPlayer.balance);
       }
       
-      // Add system message
       addMessage({
         content: data.message || 'Game has been reset! Everyone starts with $1000 again.',
         type: 'system',
@@ -447,14 +418,11 @@ export const GameProvider = ({ children }) => {
       if (!data) return;
       
       setGameState('betting');
-      // Update players array - bets should be 0 at start of new round
       if (data.players && Array.isArray(data.players)) {
         setPlayers(data.players);
       }
       setDealer(data.dealer || { cards: [], score: 0 });
       
-      // Add system message
-      // Only mention manual start if auto-skip is disabled
       const manualStartMessage = data.isAutoSkip === false ? ' (Manual start by host)' : '';
       addMessage({
         content: `New round started${manualStartMessage}. Place your bets!`,
@@ -500,7 +468,6 @@ export const GameProvider = ({ children }) => {
         type: 'system',
         timestamp: Date.now()
       });
-      
     });
     
     return () => {
@@ -559,15 +526,13 @@ export const GameProvider = ({ children }) => {
   const placeBet = (amount) => {
     if (!connected || !roomId) return;
     
-    // Optimistically update the local player's bet immediately
-    setPlayers(prevPlayers => {
-      return prevPlayers.map(p => {
-        if (p.id === socket.id) {
-          return { ...p, bet: amount, balance: p.balance - amount };
-        }
-        return p;
-      });
-    });
+    setPlayers(prevPlayers => 
+      prevPlayers.map(p => 
+        p.id === socket.id 
+          ? { ...p, bet: amount, balance: p.balance - amount }
+          : p
+      )
+    );
     
     socket.emit('place_bet', { roomId, amount });
     setLastBet(amount);
@@ -657,47 +622,22 @@ export const GameProvider = ({ children }) => {
   };
   
   const kickPlayer = (playerId) => {
-    if (!connected || !roomId) {
-      console.error('Cannot kick player: not connected or no roomId', { connected, roomId });
-      return;
-    }
-    
-    if (!socket) {
-      console.error('Cannot kick player: socket not available');
-      return;
-    }
-    
-    if (!socket.connected) {
-      return;
-    }
-    
+    if (!connected || !roomId || !socket || !socket.connected) return;
     socket.emit('kick_player', { roomId, playerId });
   };
 
   // Restart game - reset all players' balances to 1000
   const restartGame = () => {
-    if (!connected || !roomId) {
+    if (!connected || !roomId || !socket || !socket.connected) {
       alert('Error: Not connected or no room ID. Please refresh the page.');
-      return;
-    }
-    
-    if (!socket) {
-      alert('Error: Socket not available. Please refresh the page.');
-      return;
-    }
-    
-    if (!socket.connected) {
-      alert('Error: Not connected to server. Please refresh the page.');
       return;
     }
     
     socket.emit('restart_game', { roomId });
     
     socket.once('error', (error) => {
-      if (error && error.message) {
+      if (error?.message) {
         alert(`Error: ${error.message}`);
-      } else if (error) {
-        alert(`Error: ${JSON.stringify(error)}`);
       }
     });
   };
